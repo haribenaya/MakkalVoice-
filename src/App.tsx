@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, ExternalLink, Globe, Mic, Shield } from "lucide-react";
+import { ArrowDown, Check, ExternalLink, Globe, Mic, Shield } from "lucide-react";
 import { ClarifyChat } from "./components/ClarifyChat";
-import { ComplaintForm } from "./components/ComplaintForm";
+import { ComplaintForm, type ComplaintFieldErrors } from "./components/ComplaintForm";
 import { DraftReview } from "./components/DraftReview";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
 import { INDIA_STATE_DISTRICTS } from "./data/indiaLocations";
@@ -94,6 +94,7 @@ export default function App() {
   const [extractingVoice, setExtractingVoice] = useState(false);
   const [autoFillNotice, setAutoFillNotice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<ComplaintFieldErrors>({});
   const [heroImgError, setHeroImgError] = useState(false);
 
   // Voice input & speech output state
@@ -161,6 +162,10 @@ export default function App() {
   ) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     if (errorMessage) setErrorMessage(null);
+    if (field === "complaint" || field === "name" || field === "contact") {
+      const errorKey: keyof ComplaintFieldErrors = field;
+      setFieldErrors((prev) => (prev[errorKey] ? { ...prev, [errorKey]: false } : prev));
+    }
     if (autoFillNotice && field === "complaint") setAutoFillNotice(null);
   };
 
@@ -181,6 +186,7 @@ export default function App() {
       complaint: sample.complaint,
     }));
     setErrorMessage(null);
+    setFieldErrors({});
     setAutoFillNotice(null);
   };
 
@@ -202,6 +208,7 @@ export default function App() {
     setPortalChatMessages([]);
     setPortalChatError(null);
     setErrorMessage(null);
+    setFieldErrors({});
     setAutoFillNotice(null);
     setStep("describe");
   };
@@ -464,11 +471,32 @@ export default function App() {
     stopVoiceInput();
     handleStopSpeaking();
 
-    if (!form.complaint.trim() || form.complaint.trim().length < 6) {
-      setErrorMessage(t.errEmptyComplaint);
+    const trimmedComplaint = form.complaint.trim();
+    const trimmedName = form.name.trim();
+    const phoneDigits = form.contact.replace(/\D/g, "");
+
+    const nextFieldErrors: ComplaintFieldErrors = {
+      complaint: !trimmedComplaint || trimmedComplaint.length < 6,
+      name: trimmedName.length < 2,
+      contact: phoneDigits.length < 10,
+    };
+
+    if (nextFieldErrors.complaint || nextFieldErrors.name || nextFieldErrors.contact) {
+      setFieldErrors(nextFieldErrors);
+      if (nextFieldErrors.complaint) {
+        setErrorMessage(t.errEmptyComplaint);
+        document.getElementById("complaint-textarea")?.focus();
+      } else if (nextFieldErrors.name) {
+        setErrorMessage(st.errMissingName);
+        document.getElementById("name-input")?.focus();
+      } else {
+        setErrorMessage(st.errInvalidPhone);
+        document.getElementById("contact-input")?.focus();
+      }
       return;
     }
 
+    setFieldErrors({});
     setAnswers([]);
     setAskedQuestions([]);
     setCurrentQuestion("");
@@ -625,12 +653,12 @@ export default function App() {
       className="min-h-screen bg-slate-50 text-slate-900 flex flex-col"
     >
       {/* Top Bar Contract: Single row, 3 zones separated by gap-8 */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-xs border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
           {/* Zone 1: Single text element wordmark */}
           <a
             href="#top"
-            className="font-display text-lg font-bold tracking-tight text-slate-950 whitespace-nowrap shrink-0"
+            className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-950 whitespace-nowrap shrink-0"
           >
             MakkalVoice
           </a>
@@ -677,7 +705,7 @@ export default function App() {
               value={form.language}
               onChange={(e) => handleLanguageSelect(e.target.value)}
               disabled={busy}
-              className="h-10 ps-3 pe-8 text-xs font-medium text-slate-900 bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 whitespace-nowrap shrink-0"
+              className="h-10 max-w-[165px] sm:max-w-none ps-3 pe-7 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50 border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 whitespace-nowrap shrink-0"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.name} value={lang.name}>
@@ -690,22 +718,22 @@ export default function App() {
       </header>
 
       <main id="top" className="flex-1">
-        {/* Hero Section: Voice-First & Fully Localized */}
-        <section className="bg-white border-b border-slate-200">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-10 md:py-14">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-stretch">
+        {/* Hero Section: Voice-First, Clean on Both Phone & Laptop */}
+        <section className="bg-gradient-to-b from-blue-50/45 via-white to-white border-b border-slate-200/80">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-7 pb-8 sm:py-12 lg:py-14">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-12 items-stretch">
               <div className="lg:col-span-7 flex flex-col justify-center">
-                <p className="text-xs font-medium text-blue-700">{t.heroKicker}</p>
+                <p className="text-xs font-semibold text-blue-700">{t.heroKicker}</p>
 
-                <h1 className="mt-2.5 font-display text-3xl sm:text-5xl font-bold tracking-tight text-slate-950 [text-wrap:balance] leading-[1.15]">
+                <h1 className="mt-2 font-display text-[1.85rem] sm:text-4xl lg:text-[3.05rem] font-bold tracking-tight text-slate-950 [text-wrap:balance] leading-[1.12]">
                   {t.heroTitle}
                 </h1>
 
-                <p className="mt-4 text-base sm:text-lg text-slate-600 leading-relaxed max-w-xl">
+                <p className="mt-3.5 text-base sm:text-lg text-slate-600 leading-relaxed max-w-xl">
                   {t.heroSubtitle}
                 </p>
 
-                <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
+                <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-500">
                   <span>{t.heroMeta1}</span>
                   <span aria-hidden="true">·</span>
                   <span>{t.heroMeta2}</span>
@@ -713,11 +741,11 @@ export default function App() {
                   <span>{t.heroMeta3}</span>
                 </div>
 
-                <div className="mt-7 flex flex-wrap items-center gap-4">
+                <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                   <button
                     type="button"
                     onClick={handleHeroStartSpeaking}
-                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[52px]"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-xs transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
                   >
                     <Mic className="w-5 h-5" aria-hidden="true" />
                     {t.heroCta}
@@ -725,7 +753,7 @@ export default function App() {
 
                   <a
                     href="#how-it-works"
-                    className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap shrink-0"
+                    className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                   >
                     {t.heroSecondary}
                     <ArrowDown className="w-4 h-4" aria-hidden="true" />
@@ -734,14 +762,14 @@ export default function App() {
               </div>
 
               <div className="lg:col-span-5 flex">
-                <div className="w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 flex items-center justify-center">
+                <div className="w-full rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.06)] flex items-center justify-center">
                   {!heroImgError ? (
                     <img
                       src={HERO_IMAGE_PATH}
                       alt="Indian citizens speaking into a smartphone to draft a structured public grievance letter"
                       referrerPolicy="no-referrer"
                       onError={() => setHeroImgError(true)}
-                      className="w-full h-full object-cover aspect-[4/3] lg:aspect-auto"
+                      className="w-full h-52 sm:h-68 lg:h-full object-cover"
                     />
                   ) : (
                     <div className="p-8 text-center">
@@ -755,15 +783,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* One-Tap Native Script Language Bar (Switches Entire Dashboard Immediately) */}
-            <div className="mt-8 pt-6 border-t border-slate-200">
-              <p className="text-xs font-medium text-slate-500 mb-3">
+            {/* One-Tap Native Script Language Bar (Horizontal scroll rail on phone, wrapped bar on laptop) */}
+            <div className="mt-7 sm:mt-9 pt-5 border-t border-slate-200/80">
+              <p className="text-xs font-medium text-slate-500 mb-2.5">
                 {t.chooseLanguageLabel}
               </p>
               <div
                 role="group"
                 aria-label={t.chooseLanguageLabel}
-                className="flex flex-wrap items-center gap-1.5"
+                className="flex items-center gap-2 overflow-x-auto no-scrollbar sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1"
               >
                 {LANGUAGES.map((lang) => {
                   const active = form.language === lang.name;
@@ -773,10 +801,10 @@ export default function App() {
                       type="button"
                       disabled={busy}
                       onClick={() => handleLanguageSelect(lang.name)}
-                      className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg border transition-colors whitespace-nowrap min-h-[40px] ${
+                      className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl border transition-all whitespace-nowrap shrink-0 min-h-[40px] ${
                         active
-                          ? "bg-slate-900 text-white border-slate-900"
-                          : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950"
+                          ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-950"
                       }`}
                     >
                       {lang.nativeLabel}
@@ -789,14 +817,17 @@ export default function App() {
         </section>
 
         {/* Main Interactive Workflow Container */}
-        <section id="workspace" className="max-w-5xl mx-auto px-4 sm:px-6 py-8 md:py-12">
+        <section id="workspace" className="max-w-5xl mx-auto px-4 sm:px-6 py-7 sm:py-11">
           {/* 3-Step Progress Strip */}
           <nav
             aria-label="Complaint drafting steps"
-            className="mb-7 grid grid-cols-3 border border-slate-200 bg-white rounded-xl overflow-hidden divide-x divide-slate-200"
+            className="mb-6 sm:mb-7 grid grid-cols-3 border border-slate-200/90 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-x divide-slate-200/80"
           >
-            {steps.map((s) => {
+            {steps.map((s, idx) => {
               const isCurrent = step === s.id;
+              const currentIdx = steps.findIndex((item) => item.id === step);
+              const isCompleted = idx < currentIdx && s.enabled;
+
               return (
                 <button
                   key={s.id}
@@ -809,7 +840,7 @@ export default function App() {
                       setStep(s.id);
                     }
                   }}
-                  className={`px-3 sm:px-5 py-3.5 text-start transition-colors min-h-[54px] ${
+                  className={`px-2.5 sm:px-5 py-3.5 text-start transition-colors min-h-[54px] ${
                     isCurrent
                       ? "bg-slate-900 text-white"
                       : s.enabled
@@ -817,14 +848,21 @@ export default function App() {
                         : "bg-slate-50/70 text-slate-400 cursor-not-allowed"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`font-mono text-xs tabular-nums ${
-                        isCurrent ? "text-blue-300" : "text-slate-400"
-                      }`}
-                    >
-                      {s.number}
-                    </span>
+                  <div className="flex items-center gap-1.5 sm:gap-2.5">
+                    {isCompleted ? (
+                      <Check
+                        className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <span
+                        className={`font-mono text-xs tabular-nums shrink-0 ${
+                          isCurrent ? "text-blue-300" : "text-slate-400"
+                        }`}
+                      >
+                        {s.number}
+                      </span>
+                    )}
                     <span className="text-xs sm:text-sm font-medium truncate">
                       {s.label}
                     </span>
@@ -838,6 +876,7 @@ export default function App() {
           {step === "describe" && (
             <ComplaintForm
               t={t}
+              st={st}
               form={form}
               onChange={handleFieldChange}
               onApplySample={handleApplySample}
@@ -855,6 +894,7 @@ export default function App() {
               isReadingGuide={isReadingGuide}
               onToggleReadGuide={handleToggleReadGuide}
               errorMessage={errorMessage}
+              fieldErrors={fieldErrors}
             />
           )}
 
@@ -959,11 +999,11 @@ export default function App() {
               {FEATURED_OFFICIAL_PORTALS.map((portal) => (
                 <div
                   key={portal.url}
-                  className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between"
+                  className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
                 >
                   <div>
                     <p className="text-xs text-slate-500">{portal.authorityScope}</p>
-                    <h3 className="mt-1 text-base font-semibold text-slate-900">
+                    <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
                       {portal.name}
                     </h3>
                     <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
@@ -971,7 +1011,7 @@ export default function App() {
                     </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
-                    <span className="text-xs font-mono text-slate-500 truncate">
+                    <span className="text-xs font-mono tabular-nums text-slate-500 truncate">
                       {portal.helpline
                         ? `${t.helplineLabel}: ${portal.helpline}`
                         : portal.domain ?? portal.url.replace("https://", "")}
@@ -980,7 +1020,7 @@ export default function App() {
                       href={portal.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
                     >
                       {t.visitPortal}
                       <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
@@ -993,7 +1033,7 @@ export default function App() {
         </section>
 
         {/* Privacy & Trust */}
-        <section id="privacy" className="border-t border-slate-200 bg-white py-12">
+        <section id="privacy" className="border-t border-slate-200/80 bg-white py-12">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-slate-700 mt-0.5 shrink-0" aria-hidden="true" />
@@ -1006,7 +1046,7 @@ export default function App() {
                     <strong className="font-medium text-slate-900">
                       {t.privacy1Title}:
                     </strong>{" "}
-                    {t.privacy1Desc}
+                    {st.privacyRequiredLocalDesc}
                   </p>
                   <p>
                     <strong className="font-medium text-slate-900">
@@ -1027,8 +1067,8 @@ export default function App() {
         </section>
       </main>
 
-      {/* Clean Quiet Footer */}
-      <footer className="border-t border-slate-200 bg-slate-50 py-8">
+      {/* Clean Quiet Footer (extra bottom clearance on mobile for floating Submission Help button) */}
+      <footer className="border-t border-slate-200/80 bg-slate-50 pt-8 pb-24 sm:pb-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
           <p>{t.footerText}</p>
           <div className="flex items-center gap-5 shrink-0">

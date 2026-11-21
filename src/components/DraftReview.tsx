@@ -134,12 +134,12 @@ export function DraftReview({
       {/* Main Draft Review Card */}
       <section
         aria-labelledby="review-heading"
-        className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8"
+        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-slate-200">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-slate-200/80">
           <div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span className="font-medium text-blue-700">{t.step3Kicker}</span>
+              <span className="font-semibold text-blue-700">{t.step3Kicker}</span>
               <span aria-hidden="true">·</span>
               <span>{draftLanguage}</span>
               <span aria-hidden="true">·</span>
@@ -149,7 +149,7 @@ export function DraftReview({
             </div>
             <h2
               id="review-heading"
-              className="mt-1 text-2xl font-semibold tracking-tight text-slate-950"
+              className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950"
             >
               {t.step3Heading}
             </h2>
@@ -163,7 +163,7 @@ export function DraftReview({
               type="button"
               onClick={onBackToForm}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
             >
               <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
               {t.editOriginalDetails}
@@ -173,7 +173,7 @@ export function DraftReview({
               type="button"
               onClick={onBackToClarify}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
             >
               {t.viewQa}
             </button>
@@ -241,7 +241,7 @@ export function DraftReview({
               value={subject}
               onChange={(e) => onSubjectChange(e.target.value)}
               disabled={busy}
-              className="mt-1.5 w-full h-12 px-4 text-sm font-medium text-slate-950 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+              className="mt-1.5 w-full h-12 px-4 text-base sm:text-sm font-medium text-slate-950 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
             />
           </div>
 
@@ -258,12 +258,12 @@ export function DraftReview({
               value={draftText}
               onChange={(e) => onDraftTextChange(e.target.value)}
               disabled={busy}
-              className="mt-1.5 w-full p-4 text-sm sm:text-base leading-relaxed text-slate-950 bg-slate-50/40 border border-slate-300 rounded-lg focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 resize-y"
+              className="mt-1.5 w-full p-4 text-base leading-relaxed text-slate-950 bg-slate-50/40 border border-slate-300/90 rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 resize-y"
             />
           </div>
 
           {/* Primary Actions */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 pt-2">
             <button
               type="button"
               onClick={handleCopy}
@@ -344,7 +344,7 @@ export function DraftReview({
       {/* Verified Official Portal & Submission Checklist Card */}
       <section
         aria-labelledby="portal-guidance-heading"
-        className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8"
+        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
         <div className="pb-5 border-b border-slate-200">
           <p className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
@@ -503,7 +503,7 @@ export function DraftReview({
       {/* Dedicated Next Steps & Document Checklist Section at End of Draft Review */}
       <section
         aria-labelledby="next-steps-heading"
-        className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8"
+        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-slate-200">
           <div>

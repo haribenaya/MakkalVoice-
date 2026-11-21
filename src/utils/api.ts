@@ -167,8 +167,8 @@ export function hydrateLocalPersonalDetails(
   name: string,
   contact: string,
 ): string {
-  const safeName = name || "[Your Name]";
-  const safeContact = contact || "[Your Phone / Email — Optional]";
+  const safeName = name || "[Your Full Name]";
+  const safeContact = contact || "[Your Phone Number]";
 
   return draft
     .replace(/\[COMPLAINANT_NAME\]/g, safeName)

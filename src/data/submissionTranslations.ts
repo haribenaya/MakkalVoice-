@@ -51,6 +51,16 @@ export interface SubmissionUiStrings {
   chatSuggestion3: string;
   chatAskInSectionBtn: string;
   chatEmptyHint: string;
+  // Required Citizen Details (Non-Optional)
+  citizenDetailsTitle: string;
+  citizenDetailsNote: string;
+  requiredNameLabel: string;
+  requiredNamePlaceholder: string;
+  requiredPhoneLabel: string;
+  requiredPhonePlaceholder: string;
+  errMissingName: string;
+  errInvalidPhone: string;
+  privacyRequiredLocalDesc: string;
 }
 
 const EN: SubmissionUiStrings = {
@@ -112,6 +122,17 @@ const EN: SubmissionUiStrings = {
   chatSuggestion3: "What if there is no response after filing?",
   chatAskInSectionBtn: "Ask AI Filing Guide",
   chatEmptyHint: "Tap a quick question or type / speak your own below.",
+  citizenDetailsTitle: "Your Name & Phone Number",
+  citizenDetailsNote:
+    "Required to sign your formal complaint letter. Filled locally on your device — never sent to AI.",
+  requiredNameLabel: "Full Name",
+  requiredNamePlaceholder: "Enter your full name",
+  requiredPhoneLabel: "Phone Number",
+  requiredPhonePlaceholder: "Enter your 10-digit mobile number",
+  errMissingName: "Please enter your full name before continuing.",
+  errInvalidPhone: "Please enter a valid 10-digit phone number before continuing.",
+  privacyRequiredLocalDesc:
+    "Your name and phone number are filled into your complaint locally in your browser and are never sent to AI.",
 };
 
 const TA: SubmissionUiStrings = {
@@ -174,6 +195,17 @@ const TA: SubmissionUiStrings = {
   chatSuggestion3: "சமர்ப்பித்த பிறகு பதில் வரவில்லை என்றால் என்ன செய்வது?",
   chatAskInSectionBtn: "AI வழிகாட்டியிடம் கேளுங்கள்",
   chatEmptyHint: "மேலே உள்ள கேள்வியைத் தட்டவும் அல்லது கீழே பேசவும் / தட்டச்சு செய்யவும்.",
+  citizenDetailsTitle: "உங்கள் பெயர் & தொலைபேசி எண்",
+  citizenDetailsNote:
+    "உங்கள் அதிகாரப்பூர்வ புகார் கடிதத்தில் கையொப்பமிட அவசியம். உங்கள் சாதனத்திலேயே சேர்க்கப்படும் — AI-க்கு அனுப்பப்படாது.",
+  requiredNameLabel: "முழுப் பெயர்",
+  requiredNamePlaceholder: "உங்கள் முழுப் பெயரை உள்ளிடவும்",
+  requiredPhoneLabel: "தொலைபேசி எண்",
+  requiredPhonePlaceholder: "உங்கள் 10 இலக்க மொபைல் எண்ணை உள்ளிடவும்",
+  errMissingName: "தொடர்வதற்கு முன் உங்கள் முழுப் பெயரை உள்ளிடவும்.",
+  errInvalidPhone: "தொடர்வதற்கு முன் சரியான 10 இலக்க தொலைபேசி எண்ணை உள்ளிடவும்.",
+  privacyRequiredLocalDesc:
+    "உங்கள் பெயர் மற்றும் தொலைபேசி எண் உங்கள் சாதனத்திலேயே கடிதத்தில் சேர்க்கப்படும் — AI-க்கு அனுப்பப்படாது.",
 };
 
 const HI: SubmissionUiStrings = {
@@ -236,6 +268,17 @@ const HI: SubmissionUiStrings = {
   chatSuggestion3: "शिकायत दर्ज करने के बाद जवाब न आए तो क्या करें?",
   chatAskInSectionBtn: "AI गाइड से पूछें",
   chatEmptyHint: "ऊपर दिए गए प्रश्न चुनें या नीचे बोलकर / लिखकर पूछें।",
+  citizenDetailsTitle: "आपका नाम और फ़ोन नंबर",
+  citizenDetailsNote:
+    "औपचारिक शिकायत पत्र पर हस्ताक्षर के लिए आवश्यक। यह आपके डिवाइस पर ही भरा जाता है — AI को नहीं भेजा जाता।",
+  requiredNameLabel: "पूरा नाम",
+  requiredNamePlaceholder: "अपना पूरा नाम लिखें",
+  requiredPhoneLabel: "फ़ोन नंबर",
+  requiredPhonePlaceholder: "अपना 10 अंकों का मोबाइल नंबर लिखें",
+  errMissingName: "आगे बढ़ने से पहले कृपया अपना पूरा नाम लिखें।",
+  errInvalidPhone: "आगे बढ़ने से पहले कृपया सही 10 अंकों का फ़ोन नंबर लिखें।",
+  privacyRequiredLocalDesc:
+    "आपका नाम और फ़ोन नंबर आपके ब्राउज़र में ही शिकायत पत्र में जोड़े जाते हैं और कभी AI को नहीं भेजे जाते।",
 };
 
 const TE: SubmissionUiStrings = {
@@ -287,6 +330,17 @@ const TE: SubmissionUiStrings = {
   chatSuggestion2: "నమోదు చేసి ట్రాకింగ్ ID ఎలా పొందాలి?",
   chatSuggestion3: "సమర్పించిన తర్వాత స్పందన లేకపోతే ఏమి చేయాలి?",
   chatAskInSectionBtn: "AI గైడ్‌ను అడగండి",
+  citizenDetailsTitle: "మీ పేరు & ఫోన్ నంబర్",
+  citizenDetailsNote:
+    "అధికారిక ఫిర్యాదు లేఖపై సంతకం కోసం అవసరం. మీ పరికరంలోనే పూరించబడుతుంది — AI కి పంపబడదు.",
+  requiredNameLabel: "పూర్తి పేరు",
+  requiredNamePlaceholder: "మీ పూర్తి పేరు నమోదు చేయండి",
+  requiredPhoneLabel: "ఫోన్ నంబర్",
+  requiredPhonePlaceholder: "మీ 10 అంకెల మొబైల్ నంబర్ నమోదు చేయండి",
+  errMissingName: "కొనసాగే ముందు దయచేసి మీ పూర్తి పేరును నమోదు చేయండి.",
+  errInvalidPhone: "కొనసాగే ముందు దయచేసి సరైన 10 అంకెల ఫోన్ నంబర్‌ను నమోదు చేయండి.",
+  privacyRequiredLocalDesc:
+    "మీ పేరు మరియు ఫోన్ నంబర్ మీ బ్రౌజర్‌లోనే ఫిర్యాదులో చేర్చబడతాయి — AI కి పంపబడవు.",
 };
 
 const KN: SubmissionUiStrings = {
@@ -332,6 +386,17 @@ const KN: SubmissionUiStrings = {
   chatSuggestion2: "ದೂರು ಸಲ್ಲಿಸಿ ಟ್ರ್ಯಾಕಿಂಗ್ ID ಪಡೆಯುವುದು ಹೇಗೆ?",
   chatSuggestion3: "ಪ್ರತಿಕ್ರಿಯೆ ಬರದಿದ್ದರೆ ಮುಂದೇನು ಮಾಡಬೇಕು?",
   chatAskInSectionBtn: "AI ಮಾರ್ಗದರ್ಶಿಯನ್ನು ಕೇಳಿ",
+  citizenDetailsTitle: "ನಿಮ್ಮ ಹೆಸರು ಮತ್ತು ಫೋನ್ ಸಂಖ್ಯೆ",
+  citizenDetailsNote:
+    "ಅಧಿಕೃತ ದೂರು ಪತ್ರಕ್ಕೆ ಅಗತ್ಯವಿದೆ. ನಿಮ್ಮ ಸಾಧನದಲ್ಲೇ ಸೇರಿಸಲಾಗುತ್ತದೆ — AI ಗೆ ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.",
+  requiredNameLabel: "ಪೂರ್ಣ ಹೆಸರು",
+  requiredNamePlaceholder: "ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರನ್ನು ನಮೂದಿಸಿ",
+  requiredPhoneLabel: "ಫೋನ್ ಸಂಖ್ಯೆ",
+  requiredPhonePlaceholder: "ನಿಮ್ಮ 10 ಅಂಕಿಯ ಮೊಬೈಲ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ",
+  errMissingName: "ಮುಂದುವರಿಯುವ ಮೊದಲು ದಯವಿಟ್ಟು ನಿಮ್ಮ ಪೂರ್ಣ ಹೆಸರನ್ನು ನಮೂದಿಸಿ.",
+  errInvalidPhone: "ಮುಂದುವರಿಯುವ ಮೊದಲು ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ 10 ಅಂಕಿಯ ಫೋನ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.",
+  privacyRequiredLocalDesc:
+    "ನಿಮ್ಮ ಹೆಸರು ಮತ್ತು ಫೋನ್ ಸಂಖ್ಯೆಯನ್ನು ನಿಮ್ಮ ಬ್ರೌಸರ್‌ನಲ್ಲೇ ಪತ್ರದಲ್ಲಿ ಸೇರಿಸಲಾಗುತ್ತದೆ — AI ಗೆ ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.",
 };
 
 const ML: SubmissionUiStrings = {
@@ -377,6 +442,17 @@ const ML: SubmissionUiStrings = {
   chatSuggestion2: "പരാതി നൽകി ട്രാക്കിംഗ് ID എങ്ങനെ ലഭിക്കും?",
   chatSuggestion3: "മറുപടി ലഭിച്ചില്ലെങ്കിൽ എന്തു ചെയ്യണം?",
   chatAskInSectionBtn: "AI ഗൈഡിനോട് ചോദിക്കുക",
+  citizenDetailsTitle: "നിങ്ങളുടെ പേരും ഫോൺ നമ്പറും",
+  citizenDetailsNote:
+    "ഔദ്യോഗിക പരാതിക്കത്തിൽ ഒപ്പിടാൻ ആവശ്യമാണ്. നിങ്ങളുടെ ഫോണിൽ തന്നെ ചേർക്കും — AI-ലേക്ക് അയക്കില്ല.",
+  requiredNameLabel: "പൂർണ്ണ നാമം",
+  requiredNamePlaceholder: "നിങ്ങളുടെ പൂർണ്ണ നാമം നൽകുക",
+  requiredPhoneLabel: "ഫോൺ നമ്പർ",
+  requiredPhonePlaceholder: "നിങ്ങളുടെ 10 അക്ക മൊബൈൽ നമ്പർ നൽകുക",
+  errMissingName: "തുടരുന്നതിന് മുമ്പ് ദയവായി നിങ്ങളുടെ പൂർണ്ണ നാമം നൽകുക.",
+  errInvalidPhone: "തുടരുന്നതിന് മുമ്പ് സാധുവായ 10 അക്ക ഫോൺ നമ്പർ നൽകുക.",
+  privacyRequiredLocalDesc:
+    "നിങ്ങളുടെ പേരും ഫോൺ നമ്പറും നിങ്ങളുടെ ബ്രൗസറിൽ തന്നെ കത്തിൽ ചേർക്കും — AI-ലേക്ക് അയക്കില്ല.",
 };
 
 const BN: SubmissionUiStrings = {
@@ -422,6 +498,17 @@ const BN: SubmissionUiStrings = {
   chatSuggestion2: "অভিযোগ জমা দিয়ে ট্র্যাকিং নম্বর কীভাবে পাব?",
   chatSuggestion3: "জমা দেওয়ার পর উত্তর না পেলে কী করব?",
   chatAskInSectionBtn: "AI গাইডকে জিজ্ঞাসা করুন",
+  citizenDetailsTitle: "আপনার নাম ও ফোন নম্বর",
+  citizenDetailsNote:
+    "আনুষ্ঠানিক অভিযোগপত্রে স্বাক্ষরের জন্য আবশ্যক। আপনার ডিভাইসেই যুক্ত হয় — AI-তে পাঠানো হয় না।",
+  requiredNameLabel: "পূর্ণ নাম",
+  requiredNamePlaceholder: "আপনার পূর্ণ নাম লিখুন",
+  requiredPhoneLabel: "ফোন নম্বর",
+  requiredPhonePlaceholder: "আপনার ১০ সংখ্যার মোবাইল নম্বর লিখুন",
+  errMissingName: "এগিয়ে যাওয়ার আগে অনুগ্রহ করে আপনার পূর্ণ নাম লিখুন।",
+  errInvalidPhone: "এগিয়ে যাওয়ার আগে অনুগ্রহ করে একটি সঠিক ১০ সংখ্যার ফোন নম্বর লিখুন।",
+  privacyRequiredLocalDesc:
+    "আপনার নাম ও ফোন নম্বর আপনার ব্রাউজারেই চিঠিতে যুক্ত হয় এবং কখনো AI-তে পাঠানো হয় না।",
 };
 
 const MR: SubmissionUiStrings = {
@@ -467,6 +554,17 @@ const MR: SubmissionUiStrings = {
   chatSuggestion2: "तक्रार नोंदवून ट्रॅकिंग नंबर कसा मिळेल?",
   chatSuggestion3: "प्रतिसाद न मिळाल्यास पुढे काय करावे?",
   chatAskInSectionBtn: "AI मार्गदर्शकाला विचारा",
+  citizenDetailsTitle: "तुमचे नाव आणि फोन नंबर",
+  citizenDetailsNote:
+    "औपचारिक तक्रार पत्रासाठी आवश्यक. तुमच्या डिव्हाइसवरच भरले जाते — AI कडे पाठवले जात नाही.",
+  requiredNameLabel: "पूर्ण नाव",
+  requiredNamePlaceholder: "तुमचे पूर्ण नाव लिहा",
+  requiredPhoneLabel: "फोन नंबर",
+  requiredPhonePlaceholder: "तुमचा १० अंकी मोबाईल नंबर लिहा",
+  errMissingName: "पुढे जाण्यापूर्वी कृपया तुमचे पूर्ण नाव लिहा.",
+  errInvalidPhone: "पुढे जाण्यापूर्वी कृपया वैध १० अंकी फोन नंबर लिहा.",
+  privacyRequiredLocalDesc:
+    "तुमचे नाव आणि फोन नंबर तुमच्या ब्राउझरमध्येच पत्रात जोडले जातात आणि कधीही AI कडे पाठवले जात नाहीत.",
 };
 
 const GU: SubmissionUiStrings = {
@@ -512,6 +610,17 @@ const GU: SubmissionUiStrings = {
   chatSuggestion2: "ફરિયાદ નોંધાવીને ટ્રેકિંગ નંબર કેવી રીતે મેળવવો?",
   chatSuggestion3: "જો જવાબ ન મળે તો આગળ શું કરવું?",
   chatAskInSectionBtn: "AI ગાઇડને પૂછો",
+  citizenDetailsTitle: "તમારું નામ અને ફોન નંબર",
+  citizenDetailsNote:
+    "ઔપચારિક ફરિયાદ પત્ર માટે જરૂરી. તમારા ડિવાઇસ પર જ ભરાય છે — AI ને મોકલવામાં આવતું નથી.",
+  requiredNameLabel: "પૂરું નામ",
+  requiredNamePlaceholder: "તમારું પૂરું નામ લખો",
+  requiredPhoneLabel: "ફોન નંબર",
+  requiredPhonePlaceholder: "તમારો 10 અંકનો મોબાઇલ નંબર લખો",
+  errMissingName: "આગળ વધતા પહેલા કૃપા કરીને તમારું પૂરું નામ લખો.",
+  errInvalidPhone: "આગળ વધતા પહેલા કૃપા કરીને માન્ય 10 અંકનો ફોન નંબર લખો.",
+  privacyRequiredLocalDesc:
+    "તમારું નામ અને ફોન નંબર તમારા બ્રાઉઝરમાં જ ફરિયાદ પત્રમાં ઉમેરાય છે અને ક્યારેય AI ને મોકલાતા નથી.",
 };
 
 const PA: SubmissionUiStrings = {
@@ -557,6 +666,17 @@ const PA: SubmissionUiStrings = {
   chatSuggestion2: "ਸ਼ਿਕਾਇਤ ਦਰਜ ਕਰਕੇ ਟਰੈਕਿੰਗ ID ਕਿਵੇਂ ਮਿਲੇਗੀ?",
   chatSuggestion3: "ਜੇ ਜਵਾਬ ਨਾ ਮਿਲੇ ਤਾਂ ਅੱਗੇ ਕੀ ਕਰੀਏ?",
   chatAskInSectionBtn: "AI ਗਾਈਡ ਤੋਂ ਪੁੱਛੋ",
+  citizenDetailsTitle: "ਤੁਹਾਡਾ ਨਾਮ ਅਤੇ ਫ਼ੋਨ ਨੰਬਰ",
+  citizenDetailsNote:
+    "ਰਸਮੀ ਸ਼ਿਕਾਇਤ ਪੱਤਰ ਲਈ ਲਾਜ਼ਮੀ। ਤੁਹਾਡੇ ਡਿਵਾਈਸ ਵਿੱਚ ਹੀ ਭਰਿਆ ਜਾਂਦਾ ਹੈ — AI ਨੂੰ ਨਹੀਂ ਭੇਜਿਆ ਜਾਂਦਾ।",
+  requiredNameLabel: "ਪੂਰਾ ਨਾਮ",
+  requiredNamePlaceholder: "ਆਪਣਾ ਪੂਰਾ ਨਾਮ ਲਿਖੋ",
+  requiredPhoneLabel: "ਫ਼ੋਨ ਨੰਬਰ",
+  requiredPhonePlaceholder: "ਆਪਣਾ 10 ਅੰਕਾਂ ਦਾ ਮੋਬਾਈਲ ਨੰਬਰ ਲਿਖੋ",
+  errMissingName: "ਅੱਗੇ ਵਧਣ ਤੋਂ ਪਹਿਲਾਂ ਕਿਰਪਾ ਕਰਕੇ ਆਪਣਾ ਪੂਰਾ ਨਾਮ ਲਿਖੋ।",
+  errInvalidPhone: "ਅੱਗੇ ਵਧਣ ਤੋਂ ਪਹਿਲਾਂ ਕਿਰਪਾ ਕਰਕੇ ਸਹੀ 10 ਅੰਕਾਂ ਦਾ ਫ਼ੋਨ ਨੰਬਰ ਲਿਖੋ।",
+  privacyRequiredLocalDesc:
+    "ਤੁਹਾਡਾ ਨਾਮ ਅਤੇ ਫ਼ੋਨ ਨੰਬਰ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਹੀ ਪੱਤਰ ਵਿੱਚ ਜੋੜੇ ਜਾਂਦੇ ਹਨ ਅਤੇ ਕਦੇ AI ਨੂੰ ਨਹੀਂ ਭੇਜੇ ਜਾਂਦੇ।",
 };
 
 const OR: SubmissionUiStrings = {
@@ -578,6 +698,13 @@ const OR: SubmissionUiStrings = {
   chatSendBtn: "ପଠାନ୍ତୁ",
   chatSpeakBtn: "କୁହନ୍ତୁ",
   chatAskInSectionBtn: "AI ଗାଇଡ୍‌କୁ ପଚାରନ୍ତୁ",
+  citizenDetailsTitle: "ଆପଣଙ୍କ ନାମ ଏବଂ ଫୋନ୍ ନମ୍ବର",
+  requiredNameLabel: "ପୂର୍ଣ୍ଣ ନାମ",
+  requiredNamePlaceholder: "ଆପଣଙ୍କ ପୂର୍ଣ୍ଣ ନାମ ଲେଖନ୍ତୁ",
+  requiredPhoneLabel: "ଫୋନ୍ ନମ୍ବର",
+  requiredPhonePlaceholder: "ଆପଣଙ୍କ ୧୦ ଅଙ୍କ ବିଶିଷ୍ଟ ମୋବାଇଲ୍ ନମ୍ବର ଲେଖନ୍ତୁ",
+  errMissingName: "ଆଗକୁ ବଢ଼ିବା ପୂର୍ବରୁ ଦୟାକରି ଆପଣଙ୍କ ପୂର୍ଣ୍ଣ ନାମ ଲେଖନ୍ତୁ।",
+  errInvalidPhone: "ଆଗକୁ ବଢ଼ିବା ପୂର୍ବରୁ ଦୟାକରି ସଠିକ୍ ୧୦ ଅଙ୍କର ଫୋନ୍ ନମ୍ବର ଲେଖନ୍ତୁ।",
 };
 
 const AS: SubmissionUiStrings = {
@@ -599,6 +726,13 @@ const AS: SubmissionUiStrings = {
   chatSendBtn: "পঠিয়াওক",
   chatSpeakBtn: "কওক",
   chatAskInSectionBtn: "AI গাইডক সোধক",
+  citizenDetailsTitle: "আপোনাৰ নাম আৰু ফোন নম্বৰ",
+  requiredNameLabel: "সম্পূৰ্ণ নাম",
+  requiredNamePlaceholder: "আপোনাৰ সম্পূৰ্ণ নাম লিখক",
+  requiredPhoneLabel: "ফোন নম্বৰ",
+  requiredPhonePlaceholder: "আপোনাৰ ১০টা সংখ্যাৰ মোবাইল নম্বৰ লিখক",
+  errMissingName: "আগবঢ়াৰ আগতে অনুগ্ৰহ কৰি আপোনাৰ সম্পূৰ্ণ নাম লিখক।",
+  errInvalidPhone: "আগবঢ়াৰ আগতে অনুগ্ৰহ কৰি বৈধ ১০টা সংখ্যাৰ ফোন নম্বৰ লিখক।",
 };
 
 const UR: SubmissionUiStrings = {
@@ -656,6 +790,17 @@ const UR: SubmissionUiStrings = {
   chatSuggestion2: "شکایت درج کرکے ٹریکنگ نمبر کیسے ملے گا؟",
   chatSuggestion3: "اگر وقت پر جواب نہ آئے تو کیا کریں؟",
   chatAskInSectionBtn: "AI گائیڈ سے پوچھیں",
+  citizenDetailsTitle: "آپ کا نام اور فون نمبر",
+  citizenDetailsNote:
+    "باضابطہ شکایت نامہ مکمل کرنے کے لیے ضروری۔ یہ صرف آپ کے آلے پر بھرا جاتا ہے — کبھی AI کو نہیں بھیجا جاتا۔",
+  requiredNameLabel: "پورا نام",
+  requiredNamePlaceholder: "اپنا پورا نام درج کریں",
+  requiredPhoneLabel: "فون نمبر",
+  requiredPhonePlaceholder: "اپنا 10 ہندسوں کا موبائل نمبر درج کریں",
+  errMissingName: "آگے بڑھنے سے پہلے براہ کرم اپنا پورا نام درج کریں۔",
+  errInvalidPhone: "آگے بڑھنے سے پہلے براہ کرم درست 10 ہندسوں کا فون نمبر درج کریں۔",
+  privacyRequiredLocalDesc:
+    "آپ کا نام اور فون نمبر صرف آپ کے براؤزر میں خط میں شامل ہوتے ہیں اور کبھی AI کو نہیں بھیجے جاتے۔",
 };
 
 const SUBMISSION_TRANSLATIONS: Record<string, SubmissionUiStrings> = {

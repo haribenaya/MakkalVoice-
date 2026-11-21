@@ -72,12 +72,12 @@ export function ClarifyChat({
   return (
     <section
       aria-labelledby="clarify-heading"
-      className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8"
+      className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
     >
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200/80">
         <div>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-            <span className="font-medium text-blue-700">{t.step2Kicker}</span>
+            <span className="font-semibold text-blue-700">{t.step2Kicker}</span>
             <span aria-hidden="true">·</span>
             <span>{categoryLabel}</span>
             {locationLabel && (
@@ -93,7 +93,7 @@ export function ClarifyChat({
           </div>
           <h2
             id="clarify-heading"
-            className="mt-1 text-2xl font-semibold tracking-tight text-slate-950"
+            className="mt-1.5 font-display text-2xl font-bold tracking-tight text-slate-950"
           >
             {t.step2Heading}
           </h2>
@@ -104,7 +104,7 @@ export function ClarifyChat({
             type="button"
             onClick={onBackToForm}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
           >
             <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
             {t.editForm}
@@ -114,7 +114,7 @@ export function ClarifyChat({
             type="button"
             onClick={onSkipToDraft}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50/50 hover:bg-blue-50 rounded-lg transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-blue-700 border border-blue-200 bg-blue-50/60 hover:bg-blue-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
           >
             <FileText className="w-3.5 h-3.5" aria-hidden="true" />
             {t.generateDraftNow}

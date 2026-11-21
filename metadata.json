@@ -1,0 +1,10 @@
+{
+  "name": "MakkalVoice",
+  "description": "Voice-first public assistance and AI complaint drafting platform for India supporting 13 languages, guided clarification, and official portal recommendations.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

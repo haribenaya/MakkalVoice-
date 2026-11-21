@@ -1,0 +1,307 @@
+import { useEffect, useRef } from "react";
+import {
+  ArrowLeft,
+  FileText,
+  Mic,
+  MicOff,
+  Send,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
+import type { UiStrings } from "../data/translations";
+import type { AnswerEntry, ChatMessage } from "../types";
+
+interface ClarifyChatProps {
+  t: UiStrings;
+  language: string;
+  categoryLabel: string;
+  locationLabel: string;
+  messages: ChatMessage[];
+  answers: AnswerEntry[];
+  currentQuestion: string;
+  answerInput: string;
+  onAnswerInputChange: (val: string) => void;
+  onSubmitAnswer: () => void;
+  onSkipToDraft: () => void;
+  onBackToForm: () => void;
+  busy: boolean;
+  isListening: boolean;
+  interimTranscript: string;
+  speechSupported: boolean;
+  onToggleVoice: () => void;
+  isSpeakingId: string | null;
+  speechOutputSupported: boolean;
+  autoReadAloud: boolean;
+  onToggleAutoRead: () => void;
+  onSpeakMessage: (id: string, text: string) => void;
+  onStopSpeaking: () => void;
+  errorMessage: string | null;
+}
+
+export function ClarifyChat({
+  t,
+  categoryLabel,
+  locationLabel,
+  messages,
+  answers,
+  currentQuestion,
+  answerInput,
+  onAnswerInputChange,
+  onSubmitAnswer,
+  onSkipToDraft,
+  onBackToForm,
+  busy,
+  isListening,
+  interimTranscript,
+  speechSupported,
+  onToggleVoice,
+  isSpeakingId,
+  speechOutputSupported,
+  autoReadAloud,
+  onToggleAutoRead,
+  onSpeakMessage,
+  onStopSpeaking,
+  errorMessage,
+}: ClarifyChatProps) {
+  const scrollEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [messages, busy]);
+
+  return (
+    <section
+      aria-labelledby="clarify-heading"
+      className="bg-white border border-slate-200 rounded-xl p-5 sm:p-8"
+    >
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <div>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span className="font-medium text-blue-700">{t.step2Kicker}</span>
+            <span aria-hidden="true">·</span>
+            <span>{categoryLabel}</span>
+            {locationLabel && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{locationLabel}</span>
+              </>
+            )}
+            <span aria-hidden="true">·</span>
+            <span className="font-mono tabular-nums">
+              {answers.length} / 4 {t.answeredCountSuffix}
+            </span>
+          </div>
+          <h2
+            id="clarify-heading"
+            className="mt-1 text-2xl font-semibold tracking-tight text-slate-950"
+          >
+            {t.step2Heading}
+          </h2>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={onBackToForm}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" aria-hidden="true" />
+            {t.editForm}
+          </button>
+
+          <button
+            type="button"
+            onClick={onSkipToDraft}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-blue-700 border border-blue-200 bg-blue-50/50 hover:bg-blue-50 rounded-lg transition-colors whitespace-nowrap shrink-0 min-h-[44px] disabled:opacity-50"
+          >
+            <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+            {t.generateDraftNow}
+          </button>
+        </div>
+      </div>
+
+      {/* Auto-read aloud accessibility switch */}
+      {speechOutputSupported && (
+        <div className="mt-4 flex items-center justify-between gap-3 py-2.5 px-4 bg-slate-50 border border-slate-200 rounded-lg">
+          <label
+            htmlFor="auto-read-toggle"
+            className="text-xs sm:text-sm font-medium text-slate-700 cursor-pointer flex items-center gap-2"
+          >
+            <Volume2 className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+            {t.autoReadLabel}
+          </label>
+          <input
+            id="auto-read-toggle"
+            type="checkbox"
+            checked={autoReadAloud}
+            onChange={onToggleAutoRead}
+            className="h-5 w-5 rounded border-slate-300 text-blue-700 focus:ring-blue-600 cursor-pointer"
+          />
+        </div>
+      )}
+
+      {/* Conversation Stream */}
+      <div
+        role="log"
+        aria-live="polite"
+        className="mt-5 space-y-4 max-h-[420px] overflow-y-auto pr-1"
+      >
+        {messages.map((msg) => {
+          const isAssistant = msg.role === "assistant";
+          const isReadingThis = isSpeakingId === msg.id;
+
+          return (
+            <div
+              key={msg.id}
+              className={`flex ${isAssistant ? "justify-start" : "justify-end"}`}
+            >
+              <div
+                className={`max-w-[90%] md:max-w-[80%] rounded-xl px-4 py-3.5 text-base leading-relaxed ${
+                  isAssistant
+                    ? "bg-slate-50 border border-slate-200 text-slate-950"
+                    : "bg-slate-900 text-white"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-4 mb-1.5">
+                  <span
+                    className={`text-xs font-medium ${
+                      isAssistant ? "text-slate-500" : "text-slate-300"
+                    }`}
+                  >
+                    {isAssistant ? t.assistantLabel : t.yourAnswerLabel}
+                  </span>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] font-mono tabular-nums text-slate-400">
+                      {msg.timestamp}
+                    </span>
+
+                    {isAssistant && speechOutputSupported && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          isReadingThis
+                            ? onStopSpeaking()
+                            : onSpeakMessage(msg.id, msg.text)
+                        }
+                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 transition-colors whitespace-nowrap"
+                      >
+                        {isReadingThis ? (
+                          <>
+                            <VolumeX className="w-4 h-4" aria-hidden="true" />
+                            {t.stopBtn}
+                          </>
+                        ) : (
+                          <>
+                            <Volume2 className="w-4 h-4" aria-hidden="true" />
+                            {t.listenBtn}
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <p className="whitespace-pre-wrap">{msg.text}</p>
+              </div>
+            </div>
+          );
+        })}
+
+        {busy && (
+          <div className="flex justify-start">
+            <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-600">
+              {currentQuestion ? t.processingAnswer : t.preparingQuestion}
+            </div>
+          </div>
+        )}
+        <div ref={scrollEndRef} />
+      </div>
+
+      {errorMessage && (
+        <div
+          role="alert"
+          className="mt-4 px-4 py-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg"
+        >
+          {errorMessage}
+        </div>
+      )}
+
+      {/* Voice-First Answer Bar */}
+      <form
+        className="mt-6 pt-5 border-t border-slate-200 space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmitAnswer();
+        }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <label
+            htmlFor="followup-answer-input"
+            className="text-sm font-medium text-slate-800"
+          >
+            {t.replyPrompt}
+          </label>
+
+          {speechSupported && (
+            <button
+              type="button"
+              onClick={onToggleVoice}
+              disabled={busy}
+              className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px] ${
+                isListening
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50"
+              }`}
+            >
+              {isListening ? (
+                <>
+                  <MicOff className="w-4 h-4" aria-hidden="true" />
+                  {t.stopListening}
+                </>
+              ) : (
+                <>
+                  <Mic className="w-4 h-4" aria-hidden="true" />
+                  {t.speakAnswer}
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {isListening && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="px-4 py-2.5 text-sm bg-red-50 text-red-900 border border-red-200 rounded-lg"
+          >
+            {interimTranscript ? `“${interimTranscript}”` : t.listeningNow}
+          </div>
+        )}
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            id="followup-answer-input"
+            type="text"
+            value={answerInput}
+            onChange={(e) => onAnswerInputChange(e.target.value)}
+            disabled={busy}
+            placeholder={t.answerPlaceholder}
+            className="flex-1 h-12 px-4 text-base text-slate-900 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+          />
+
+          <button
+            type="submit"
+            disabled={busy || !answerInput.trim()}
+            className="inline-flex items-center justify-center gap-2 px-6 h-12 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap shrink-0 disabled:opacity-50"
+          >
+            <Send className="w-4 h-4" aria-hidden="true" />
+            {t.sendAnswer}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}

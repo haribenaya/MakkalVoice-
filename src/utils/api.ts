@@ -2,6 +2,9 @@ import type {
   AnswerEntry,
   ComplaintFormState,
   DraftResponse,
+  GpsLocationResult,
+  SavedComplaintRecord,
+  ScannedEvidenceResult,
   VoiceExtractionResponse,
 } from "../types";
 import { LANGUAGE_LOCALE_MAP } from "../data/languages";
@@ -27,6 +30,8 @@ export function buildPrivacySafePayload(
 ): Record<string, unknown> {
   // Personal name & contact number are intentionally omitted from AI requests
   return {
+    mode: form.mode,
+    previousTicketId: form.previousTicketId.trim(),
     language: form.language,
     languageCode: LANGUAGE_LOCALE_MAP[form.language] ?? "en-IN",
     category: form.category,
@@ -35,6 +40,8 @@ export function buildPrivacySafePayload(
     town: form.town.trim(),
     street: form.street.trim(),
     pincode: form.pincode.trim(),
+    gpsLat: form.gpsLat,
+    gpsLng: form.gpsLng,
     referenceNumber: form.referenceNumber.trim(),
     complaint: form.complaint.trim(),
     ...extras,
@@ -68,6 +75,13 @@ export async function postApiJSON<T>(
   }
 
   if (!response.ok) {
+    // Tier 2 Google Maps Demo Key Quota Detection
+    if (
+      response.status === 429 &&
+      (endpoint === "reverse-geocode" || data.code === "GMP_QUOTA_EXCEEDED")
+    ) {
+      window.dispatchEvent(new CustomEvent("gmp-quota-exceeded"));
+    }
     const serverMessage =
       typeof data.error === "string" && data.error.trim()
         ? data.error.trim()
@@ -76,6 +90,38 @@ export async function postApiJSON<T>(
   }
 
   return data as T;
+}
+
+export async function fetchMapsApiKey(): Promise<string> {
+  const envKey = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+  if (envKey) return envKey;
+  try {
+    const res = await fetch(`${API_BASE}/maps-config`);
+    if (!res.ok) return "";
+    const data = (await res.json()) as { apiKey?: string };
+    return typeof data.apiKey === "string" ? data.apiKey.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+export function requestReverseGeocode(
+  lat: number,
+  lng: number,
+): Promise<GpsLocationResult> {
+  return postApiJSON<GpsLocationResult>("reverse-geocode", { lat, lng });
+}
+
+export function requestEvidenceScan(
+  imageBase64: string,
+  mimeType: string,
+  language: string,
+): Promise<ScannedEvidenceResult> {
+  return postApiJSON<ScannedEvidenceResult>("analyze-evidence", {
+    imageBase64,
+    mimeType,
+    language,
+  });
 }
 
 export function requestVoiceExtraction(
@@ -117,7 +163,7 @@ export async function requestComplaintDraft(
     }),
   );
 
-  // Locally fill optional personal contact placeholders in the browser
+  // Locally fill citizen's mandatory name & phone details inside the browser only
   const hydratedDraft = hydrateLocalPersonalDetails(
     raw.draft ?? "",
     form.name.trim(),
@@ -137,6 +183,35 @@ export async function requestComplaintDraft(
     filingSteps: Array.isArray(raw.filingSteps) ? raw.filingSteps : [],
     requiredDocuments: Array.isArray(raw.requiredDocuments) ? raw.requiredDocuments : [],
     englishButtonGuide: Array.isArray(raw.englishButtonGuide) ? raw.englishButtonGuide : [],
+  };
+}
+
+export async function requestEscalationDraft(
+  record: SavedComplaintRecord,
+  citizenName: string,
+  citizenPhone: string,
+  uiLanguage: string,
+): Promise<DraftResponse> {
+  const raw = await postApiJSON<DraftResponse>("escalation-draft", {
+    subject: record.subject,
+    originalDraft: record.draft,
+    category: record.category,
+    state: record.state,
+    district: record.district,
+    town: record.town,
+    street: record.street,
+    pincode: record.pincode,
+    referenceNumber: record.referenceNumber,
+    portalName: record.portalName,
+    trackingId: record.trackingId,
+    filedDate: record.createdAt,
+    uiLanguage,
+    draftLanguage: "English",
+  });
+
+  return {
+    ...raw,
+    draft: hydrateLocalPersonalDetails(raw.draft ?? "", citizenName.trim(), citizenPhone.trim()),
   };
 }
 

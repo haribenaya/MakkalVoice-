@@ -1,18 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDown, Check, ExternalLink, Globe, Mic, Shield } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowDown,
+  Check,
+  ExternalLink,
+  Globe,
+  Mic,
+  Shield,
+  X,
+} from "lucide-react";
 import { ClarifyChat } from "./components/ClarifyChat";
 import { ComplaintForm, type ComplaintFieldErrors } from "./components/ComplaintForm";
+import { ComplaintTrackerSection } from "./components/ComplaintTrackerSection";
 import { DraftReview } from "./components/DraftReview";
+import { HandsFreeVoiceModal } from "./components/HandsFreeVoiceModal";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
+import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
 import { INDIA_STATE_DISTRICTS } from "./data/indiaLocations";
+import { getInnovationStrings } from "./data/innovationTranslations";
 import {
   LANGUAGES,
   LANGUAGE_LOCALE_MAP,
   SAMPLE_SCENARIOS,
 } from "./data/languages";
-import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
 import { getLocalizedDistrictName, getLocalizedStateName } from "./data/localizedLocations";
 import { localizePortalEntry, PORTAL_LANGUAGE_SUPPORT } from "./data/localizedPortals";
+import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
 import { getSubmissionStrings } from "./data/submissionTranslations";
 import { getUiStrings } from "./data/translations";
 import type {
@@ -20,17 +33,23 @@ import type {
   ChatMessage,
   ComplaintFormState,
   DraftResponse,
+  EvidenceAttachment,
+  GpsLocationResult,
   PortalChatMessage,
+  SavedComplaintRecord,
   StepId,
 } from "./types";
 import {
   isClientDuplicateQuestion,
   requestComplaintDraft,
+  requestEscalationDraft,
+  requestEvidenceScan,
   requestFollowupQuestion,
   requestPortalAssistantChat,
   requestVoiceExtraction,
   resolveEffectiveDistrict,
 } from "./utils/api";
+import { compressImageForPortal } from "./utils/mediaTools";
 import {
   getSpeechRecognitionConstructor,
   isSpeechRecognitionSupported,
@@ -40,11 +59,21 @@ import {
   stopSpeakingText,
   type SpeechRecognitionLike,
 } from "./utils/speech";
+import {
+  clearAutosavedForm,
+  defaultReminderDateIso,
+  loadAutosavedForm,
+  loadSavedComplaints,
+  persistSavedComplaints,
+  saveAutosavedForm,
+} from "./utils/storage";
 
 const HERO_IMAGE_PATH = "/src/assets/images/hero_makkalvoice_1795284698438.jpg";
 const HERO_BANNER_PATH = "/src/assets/images/civic_voice_backdrop_1795320159387.jpg";
 
 const INITIAL_FORM: ComplaintFormState = {
+  mode: "complaint",
+  previousTicketId: "",
   language: "Tamil",
   category: "Civic Issues",
   state: "Tamil Nadu",
@@ -53,6 +82,8 @@ const INITIAL_FORM: ComplaintFormState = {
   town: "",
   street: "",
   pincode: "",
+  gpsLat: undefined,
+  gpsLng: undefined,
   referenceNumber: "",
   name: "",
   contact: "",
@@ -71,8 +102,12 @@ function makeMessageId(): string {
 }
 
 export default function App() {
-  const [form, setForm] = useState<ComplaintFormState>(INITIAL_FORM);
+  const [form, setForm] = useState<ComplaintFormState>(() => {
+    const saved = loadAutosavedForm();
+    return saved ? { ...INITIAL_FORM, ...saved } : INITIAL_FORM;
+  });
   const [step, setStep] = useState<StepId>("describe");
+  const [autosaved, setAutosaved] = useState(false);
 
   // Clarify state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -87,6 +122,27 @@ export default function App() {
   const [editableSubject, setEditableSubject] = useState("");
   const [editableDraft, setEditableDraft] = useState("");
   const [draftLanguage, setDraftLanguage] = useState("English");
+
+  // Innovation 1: Photo & Bill Scanner state
+  const [scanningEvidence, setScanningEvidence] = useState(false);
+  const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null);
+  const [scanNotice, setScanNotice] = useState<string | null>(null);
+
+  // Innovation 3: Proof Attachments for Photo Compressor & PDF Bundler
+  const [attachments, setAttachments] = useState<EvidenceAttachment[]>([]);
+
+  // Innovation 4: Personal Complaint Tracker Vault
+  const [savedRecords, setSavedRecords] = useState<SavedComplaintRecord[]>(() =>
+    loadSavedComplaints(),
+  );
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  const [escalatingId, setEscalatingId] = useState<string | null>(null);
+
+  // Innovation 7: Hands-Free Voice Mode modal
+  const [handsFreeOpen, setHandsFreeOpen] = useState(false);
+
+  // Google Maps Demo Key Quota Banner (Case A mandatory handler)
+  const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
 
   // Multi-turn Gemini Portal Submission Assistant Chatbot state
   const [portalChatOpen, setPortalChatOpen] = useState(false);
@@ -112,8 +168,37 @@ export default function App() {
 
   const t = useMemo(() => getUiStrings(form.language), [form.language]);
   const st = useMemo(() => getSubmissionStrings(form.language), [form.language]);
+  const it = useMemo(() => getInnovationStrings(form.language), [form.language]);
   const speechSupported = useMemo(() => isSpeechRecognitionSupported(), []);
   const speechOutputSupported = useMemo(() => isSpeechSynthesisSupported(), []);
+
+  // Listen for Google Maps Platform Demo Key Quota events (Tier 1 + Tier 2)
+  useEffect(() => {
+    const onQuota = () => setMapsQuotaExceeded(true);
+    window.addEventListener("gmp-quota-exceeded", onQuota);
+    return () => window.removeEventListener("gmp-quota-exceeded", onQuota);
+  }, []);
+
+  // Innovation 6: Automatic Offline Form Auto-Save in localStorage
+  useEffect(() => {
+    const hasContent =
+      form.complaint.trim().length > 0 ||
+      form.name.trim().length > 0 ||
+      form.contact.trim().length > 0 ||
+      form.town.trim().length > 0 ||
+      form.street.trim().length > 0;
+    if (!hasContent) return;
+    const timer = setTimeout(() => {
+      saveAutosavedForm(form);
+      setAutosaved(true);
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [form]);
+
+  // Persist Complaint Tracker updates
+  useEffect(() => {
+    persistSavedComplaints(savedRecords);
+  }, [savedRecords]);
 
   // Sync HTML lang and dir attributes whenever user changes dashboard language
   useEffect(() => {
@@ -175,6 +260,121 @@ export default function App() {
     if (autoFillNotice && field === "complaint") setAutoFillNotice(null);
   };
 
+  const applyDistrictToForm = useCallback(
+    (prev: ComplaintFormState, nextState: string, rawDistrict: string): Pick<ComplaintFormState, "district" | "customDistrict"> => {
+      const districts = nextState ? INDIA_STATE_DISTRICTS[nextState] ?? [] : [];
+      if (rawDistrict) {
+        const exactDistrict = districts.find(
+          (d) => d.toLowerCase() === rawDistrict.toLowerCase(),
+        );
+        if (exactDistrict) {
+          return { district: exactDistrict, customDistrict: "" };
+        }
+        const partialDistrict = districts.find(
+          (d) =>
+            d.toLowerCase().includes(rawDistrict.toLowerCase()) ||
+            rawDistrict.toLowerCase().includes(d.toLowerCase()),
+        );
+        if (partialDistrict) {
+          return { district: partialDistrict, customDistrict: "" };
+        }
+        if (districts.length > 0) {
+          return { district: "__other__", customDistrict: rawDistrict };
+        }
+        return { district: rawDistrict, customDistrict: "" };
+      }
+      if (nextState && nextState !== prev.state) {
+        return { district: "", customDistrict: "" };
+      }
+      return { district: prev.district, customDistrict: prev.customDistrict };
+    },
+    [],
+  );
+
+  // Innovation 2: Apply reverse-geocoded GPS location cleanly to State, District, Town, Street, Pincode
+  const handleGpsLocationResolved = useCallback(
+    (result: GpsLocationResult) => {
+      setForm((prev) => {
+        const nextState = result.state || prev.state;
+        const { district, customDistrict } = applyDistrictToForm(
+          prev,
+          nextState,
+          result.district,
+        );
+        return {
+          ...prev,
+          state: nextState,
+          district,
+          customDistrict,
+          town: result.town || prev.town,
+          street: result.street || prev.street,
+          pincode: result.pincode || prev.pincode,
+          gpsLat: result.lat,
+          gpsLng: result.lng,
+        };
+      });
+    },
+    [applyDistrictToForm],
+  );
+
+  // Innovation 1: AI Photo & Bill Scanner (also saves compressed proof photo for Step 3)
+  const handleScanEvidenceFile = async (file: File) => {
+    if (scanningEvidence || busy) return;
+    stopVoiceInput();
+    setScanningEvidence(true);
+    setErrorMessage(null);
+    setScanNotice(null);
+
+    try {
+      const compressed = await compressImageForPortal(file, 1280, 650);
+      setScanPreviewUrl(compressed.dataUrl);
+      const base64Body = compressed.dataUrl.split(",")[1] ?? "";
+      const scanned = await requestEvidenceScan(base64Body, "image/jpeg", form.language);
+
+      // Keep scanned photo automatically ready in Step 3 evidence list too
+      setAttachments((prev) =>
+        prev.length < 6 ? [compressed, ...prev] : prev,
+      );
+
+      setForm((prev) => ({
+        ...prev,
+        complaint: scanned.issueSummary
+          ? prev.complaint.trim()
+            ? `${prev.complaint.trim()}\n${scanned.issueSummary}`
+            : scanned.issueSummary
+          : prev.complaint,
+        category: scanned.suggestedCategory ?? prev.category,
+        referenceNumber: scanned.extractedReferenceNumber || prev.referenceNumber,
+        street: scanned.extractedLocationHint && !prev.street.trim()
+          ? scanned.extractedLocationHint
+          : prev.street,
+      }));
+
+      const extras = [
+        scanned.extractedReferenceNumber ? `Ref: ${scanned.extractedReferenceNumber}` : "",
+        scanned.suggestedCategory ? t.categories[scanned.suggestedCategory] : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      setScanNotice(extras ? `${it.scanSuccessPrefix} (${extras})` : it.scanSuccessPrefix);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : it.scanErrorGeneric);
+    } finally {
+      setScanningEvidence(false);
+    }
+  };
+
+  // Innovation 7: Hands-Free Voice Assistant completion
+  const handleHandsFreeComplete = (spokenComplaint: string, spokenLocation: string) => {
+    setForm((prev) => ({
+      ...prev,
+      complaint: spokenComplaint || prev.complaint,
+      street: spokenLocation && !prev.street.trim() ? spokenLocation : prev.street,
+    }));
+    setStep("describe");
+    document.getElementById("complaint-form")?.scrollIntoView({ behavior: "smooth" });
+  };
+
   const handleApplySample = (sampleIndex: number) => {
     const sample = SAMPLE_SCENARIOS[sampleIndex];
     if (!sample) return;
@@ -182,6 +382,7 @@ export default function App() {
     handleStopSpeaking();
     setForm((prev) => ({
       ...prev,
+      mode: "complaint",
       language: sample.language,
       category: sample.category,
       state: sample.state,
@@ -199,6 +400,8 @@ export default function App() {
   const handleResetForm = () => {
     stopVoiceInput();
     handleStopSpeaking();
+    clearAutosavedForm();
+    setAutosaved(false);
     setForm((prev) => ({
       ...INITIAL_FORM,
       language: prev.language,
@@ -211,6 +414,10 @@ export default function App() {
     setDraftData(null);
     setEditableSubject("");
     setEditableDraft("");
+    setActiveSavedId(null);
+    setAttachments([]);
+    setScanPreviewUrl(null);
+    setScanNotice(null);
     setPortalChatMessages([]);
     setPortalChatError(null);
     setErrorMessage(null);
@@ -345,34 +552,17 @@ export default function App() {
       const extracted = await requestVoiceExtraction(form.complaint, form.language);
       setForm((prev) => {
         const nextState = extracted.state || prev.state;
-        const districts = nextState ? INDIA_STATE_DISTRICTS[nextState] ?? [] : [];
-        let nextDistrict = prev.district;
-        let nextCustomDistrict = prev.customDistrict;
-
-        if (extracted.district) {
-          const exactDistrict = districts.find(
-            (d) => d.toLowerCase() === extracted.district?.toLowerCase(),
-          );
-          if (exactDistrict) {
-            nextDistrict = exactDistrict;
-            nextCustomDistrict = "";
-          } else if (districts.length > 0) {
-            nextDistrict = "__other__";
-            nextCustomDistrict = extracted.district;
-          } else {
-            nextDistrict = extracted.district;
-          }
-        } else if (extracted.state && extracted.state !== prev.state) {
-          nextDistrict = "";
-          nextCustomDistrict = "";
-        }
-
+        const { district, customDistrict } = applyDistrictToForm(
+          prev,
+          nextState,
+          extracted.district ?? "",
+        );
         return {
           ...prev,
           category: extracted.category ?? prev.category,
           state: nextState,
-          district: nextDistrict,
-          customDistrict: nextCustomDistrict,
+          district,
+          customDistrict,
           town: extracted.town || prev.town,
           street: extracted.street || prev.street,
         };
@@ -407,6 +597,7 @@ export default function App() {
       setEditableSubject(generated.subject);
       setEditableDraft(generated.draft);
       setDraftLanguage(generated.draftLanguage);
+      setActiveSavedId(null);
       setStep("review");
     } catch (err) {
       setErrorMessage(
@@ -473,6 +664,7 @@ export default function App() {
     }
   };
 
+  // Strictly enforces mandatory Full Name and 10-digit Phone Number before moving forward
   const beginComplaint = async () => {
     stopVoiceInput();
     handleStopSpeaking();
@@ -508,6 +700,7 @@ export default function App() {
     setCurrentQuestion("");
     setAnswerInput("");
     setDraftData(null);
+    setActiveSavedId(null);
     setErrorMessage(null);
 
     const introMsg: ChatMessage = {
@@ -582,6 +775,121 @@ export default function App() {
       form.language,
     ],
   );
+
+  // Innovation 4: Personal Complaint Tracker handlers
+  const handleSaveToTracker = () => {
+    if (!editableDraft.trim()) return;
+    if (activeSavedId) {
+      setSavedRecords((prev) =>
+        prev.map((rec) =>
+          rec.id === activeSavedId
+            ? { ...rec, subject: editableSubject, draft: editableDraft }
+            : rec,
+        ),
+      );
+      return;
+    }
+
+    const newId = makeMessageId();
+    const newRecord: SavedComplaintRecord = {
+      id: newId,
+      createdAt: new Date().toISOString().slice(0, 10),
+      mode: form.mode,
+      language: form.language,
+      category: form.category,
+      subject: editableSubject.trim() || "Public Grievance Draft",
+      draft: editableDraft.trim(),
+      state: form.state,
+      district: effectiveDistrict,
+      town: form.town.trim(),
+      street: form.street.trim(),
+      pincode: form.pincode.trim(),
+      referenceNumber: form.referenceNumber.trim(),
+      portalName: portalGuidance.primary.name,
+      portalUrl: portalGuidance.primary.url,
+      portalHelpline: portalGuidance.primary.helpline,
+      trackingId: form.previousTicketId.trim(),
+      status: "drafted",
+      reminderDate: defaultReminderDateIso(15),
+    };
+
+    setSavedRecords((prev) => [newRecord, ...prev]);
+    setActiveSavedId(newId);
+  };
+
+  const handleUpdateTrackerRecord = (id: string, patch: Partial<SavedComplaintRecord>) => {
+    setSavedRecords((prev) =>
+      prev.map((rec) => (rec.id === id ? { ...rec, ...patch } : rec)),
+    );
+  };
+
+  const handleDeleteTrackerRecord = (id: string) => {
+    setSavedRecords((prev) => prev.filter((rec) => rec.id !== id));
+    if (activeSavedId === id) setActiveSavedId(null);
+  };
+
+  const handleLoadTrackerRecord = (record: SavedComplaintRecord) => {
+    setForm((prev) => ({
+      ...prev,
+      mode: record.mode,
+      previousTicketId: record.trackingId,
+      category: record.category,
+      state: record.state,
+      district: record.district,
+      customDistrict: "",
+      town: record.town,
+      street: record.street,
+      pincode: record.pincode,
+      referenceNumber: record.referenceNumber,
+    }));
+    setDraftData({
+      subject: record.subject,
+      draft: record.draft,
+      suggestedAuthority: record.portalName,
+      summaryPoints: [],
+      draftLanguage: "English",
+      primaryPortalId: "cpgrams",
+      whyThisPortal: "",
+      filingSteps: [],
+      requiredDocuments: [],
+    });
+    setEditableSubject(record.subject);
+    setEditableDraft(record.draft);
+    setDraftLanguage("English");
+    setActiveSavedId(record.id);
+    setStep("review");
+    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  const handleGenerateEscalationFromTracker = async (record: SavedComplaintRecord) => {
+    if (escalatingId || busy) return;
+    setEscalatingId(record.id);
+    setErrorMessage(null);
+
+    try {
+      const escalation = await requestEscalationDraft(
+        record,
+        form.name.trim(),
+        form.contact.trim(),
+        form.language,
+      );
+      setDraftData(escalation);
+      setEditableSubject(escalation.subject);
+      setEditableDraft(escalation.draft);
+      setDraftLanguage(escalation.draftLanguage);
+      setActiveSavedId(null);
+      setStep("review");
+      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    } catch (err) {
+      setErrorMessage(
+        err instanceof Error
+          ? err.message
+          : "Could not draft escalation letter right now. Please try again.",
+      );
+    } finally {
+      setEscalatingId(null);
+    }
+  };
 
   const steps: Array<{ id: StepId; number: string; label: string; enabled: boolean }> = [
     { id: "describe", number: "01", label: t.step1Label, enabled: true },
@@ -664,9 +972,45 @@ export default function App() {
       dir={t.isRtl ? "rtl" : "ltr"}
       className="min-h-screen bg-slate-50 text-slate-900 flex flex-col"
     >
+      {/* Mandatory Google Maps Platform Demo Key Quota Banner (Case A) */}
+      {mapsQuotaExceeded && (
+        <div
+          role="alert"
+          className="no-print sticky top-0 z-50 bg-amber-50 border-b border-amber-300 text-amber-950 px-4 py-3 text-xs sm:text-sm"
+        >
+          <div className="max-w-5xl mx-auto flex items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5 sm:mt-0" aria-hidden="true" />
+              <p className="leading-relaxed">
+                Google Maps daily demo quota has been reached. You can still select your State, District, and address manually.{" "}
+                <a
+                  href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold underline text-amber-900 hover:text-amber-950"
+                >
+                  Learn how to upgrade quota
+                </a>
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMapsQuotaExceeded(false)}
+              className="p-1 text-amber-800 hover:text-amber-950 rounded-lg shrink-0"
+              aria-label="Dismiss quota notice"
+            >
+              <X className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PWA Offline Banner */}
+      <OfflineIndicator it={it} />
+
       {/* Top Bar Contract: Single row, 3 zones aligned with workspace max-w-5xl */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
+      <header className="no-print sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3 sm:gap-6">
           {/* Zone 1: Single text element wordmark */}
           <a
             href="#top"
@@ -678,13 +1022,20 @@ export default function App() {
           {/* Zone 2: Clean single-line text nav links (localized) */}
           <nav
             aria-label="Primary navigation"
-            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
+            className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600"
           >
             <a
               href="#workspace"
               className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
             >
               {t.navDraft}
+            </a>
+            <a
+              href="#complaint-tracker"
+              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            >
+              {it.navTracker}
+              {savedRecords.length > 0 ? ` (${savedRecords.length})` : ""}
             </a>
             <a
               href="#how-it-works"
@@ -706,8 +1057,9 @@ export default function App() {
             </a>
           </nav>
 
-          {/* Zone 3: Single compact language selector */}
+          {/* Zone 3: PWA Install Button (when installable) + Single compact language selector */}
           <div className="flex items-center gap-2 shrink-0">
+            <PWAInstallButton it={it} />
             <label htmlFor="header-language-select" className="sr-only">
               {t.chooseLanguageLabel}
             </label>
@@ -717,7 +1069,7 @@ export default function App() {
               value={form.language}
               onChange={(e) => handleLanguageSelect(e.target.value)}
               disabled={busy}
-              className="h-10 max-w-[165px] sm:max-w-none ps-3 pe-7 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50 border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 whitespace-nowrap shrink-0"
+              className="h-10 max-w-[155px] sm:max-w-none ps-3 pe-7 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50 border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 whitespace-nowrap shrink-0"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.name} value={lang.name}>
@@ -731,8 +1083,7 @@ export default function App() {
 
       <main id="top" className="flex-1">
         {/* Hero Section: Civic Concept Background Banner + Measured Contrast Scrim */}
-        <section className="relative overflow-hidden bg-slate-50 border-b border-slate-200/80">
-          {/* Concept Background Banner */}
+        <section className="no-print relative overflow-hidden bg-slate-50 border-b border-slate-200/80">
           {!bannerImgError && (
             <img
               src={HERO_BANNER_PATH}
@@ -744,7 +1095,6 @@ export default function App() {
             />
           )}
 
-          {/* Measured Editorial Scrim for crisp WCAG AA readability on phone & laptop */}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/92 lg:bg-gradient-to-r lg:from-white/95 lg:via-white/82 lg:to-white/45"
@@ -820,7 +1170,7 @@ export default function App() {
           {/* 3-Step Progress Strip */}
           <nav
             aria-label="Complaint drafting steps"
-            className="mb-6 sm:mb-7 grid grid-cols-3 border border-slate-200/90 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-x divide-slate-200/80"
+            className="no-print mb-6 sm:mb-7 grid grid-cols-3 border border-slate-200/90 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-x divide-slate-200/80"
           >
             {steps.map((s, idx) => {
               const isCurrent = step === s.id;
@@ -876,6 +1226,7 @@ export default function App() {
             <ComplaintForm
               t={t}
               st={st}
+              it={it}
               form={form}
               onChange={handleFieldChange}
               onApplySample={handleApplySample}
@@ -884,6 +1235,13 @@ export default function App() {
               onAutoDetectFromVoice={handleAutoDetectFromVoice}
               extractingVoice={extractingVoice}
               autoFillNotice={autoFillNotice}
+              onScanEvidenceFile={(file) => void handleScanEvidenceFile(file)}
+              scanningEvidence={scanningEvidence}
+              scanPreviewUrl={scanPreviewUrl}
+              scanNotice={scanNotice}
+              onGpsLocationResolved={handleGpsLocationResolved}
+              onOpenHandsFree={() => setHandsFreeOpen(true)}
+              autosaved={autosaved}
               busy={busy}
               isListening={voiceTarget === "complaint"}
               interimTranscript={voiceTarget === "complaint" ? interimTranscript : ""}
@@ -934,6 +1292,7 @@ export default function App() {
             <DraftReview
               t={t}
               st={st}
+              it={it}
               form={form}
               draftData={draftData}
               subject={editableSubject}
@@ -949,12 +1308,27 @@ export default function App() {
               busy={busy}
               errorMessage={errorMessage}
               onOpenAssistant={handleOpenAssistant}
+              attachments={attachments}
+              onAttachmentsChange={setAttachments}
+              isSavedToTracker={activeSavedId !== null}
+              onSaveToTracker={handleSaveToTracker}
             />
           )}
         </section>
 
+        {/* Innovation 4: Personal Complaint Tracker & Escalation Reminders Vault */}
+        <ComplaintTrackerSection
+          it={it}
+          records={savedRecords}
+          escalatingId={escalatingId}
+          onUpdateRecord={handleUpdateTrackerRecord}
+          onDeleteRecord={handleDeleteTrackerRecord}
+          onGenerateEscalation={(rec) => void handleGenerateEscalationFromTracker(rec)}
+          onLoadRecordIntoReview={handleLoadTrackerRecord}
+        />
+
         {/* How It Works Section (Localized) */}
-        <section id="how-it-works" className="border-t border-slate-200 bg-white py-14">
+        <section id="how-it-works" className="no-print border-t border-slate-200 bg-white py-14">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">
               {t.howItWorksTitle}
@@ -985,7 +1359,7 @@ export default function App() {
         {/* Verified Official Portals Reference */}
         <section
           id="official-portals"
-          className="border-t border-slate-200 bg-slate-50 py-14"
+          className="no-print border-t border-slate-200 bg-slate-50 py-14"
         >
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">
@@ -1055,7 +1429,7 @@ export default function App() {
         </section>
 
         {/* Privacy & Trust */}
-        <section id="privacy" className="border-t border-slate-200/80 bg-white py-12">
+        <section id="privacy" className="no-print border-t border-slate-200/80 bg-white py-12">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-slate-700 mt-0.5 shrink-0" aria-hidden="true" />
@@ -1089,13 +1463,16 @@ export default function App() {
         </section>
       </main>
 
-      {/* Clean Quiet Footer (extra bottom clearance on mobile for floating Submission Help button) */}
-      <footer className="border-t border-slate-200/80 bg-slate-50 pt-8 pb-24 sm:pb-10">
+      {/* Clean Quiet Footer */}
+      <footer className="no-print border-t border-slate-200/80 bg-slate-50 pt-8 pb-24 sm:pb-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
           <p>{t.footerText}</p>
           <div className="flex items-center gap-5 shrink-0">
             <a href="#workspace" className="hover:text-slate-900 transition-colors whitespace-nowrap">
               {t.navDraft}
+            </a>
+            <a href="#complaint-tracker" className="hover:text-slate-900 transition-colors whitespace-nowrap">
+              {it.navTracker}
             </a>
             <a href="#official-portals" className="hover:text-slate-900 transition-colors whitespace-nowrap">
               {t.navPortals}
@@ -1107,24 +1484,36 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Multi-turn Gemini Portal & Submission Assistant Chatbot */}
-      <PortalAssistantChat
-        open={portalChatOpen}
-        onOpenChange={setPortalChatOpen}
-        st={st}
+      {/* Innovation 7: Hands-Free Voice Conversation Mode Modal */}
+      <HandsFreeVoiceModal
+        open={handsFreeOpen}
+        onClose={() => setHandsFreeOpen(false)}
         language={form.language}
-        portalName={portalGuidance.primary.name}
-        hasActiveDraft={draftData !== null}
-        messages={portalChatMessages}
-        busy={portalChatBusy}
-        errorMessage={portalChatError}
-        onSendMessage={handleSendPortalChat}
-        onClearChat={() => {
-          setPortalChatMessages([]);
-          setPortalChatError(null);
-        }}
-        voiceUnsupportedText={t.voiceUnsupported}
+        it={it}
+        initialComplaint={form.complaint}
+        onComplete={handleHandsFreeComplete}
       />
+
+      {/* Multi-turn Gemini Portal & Submission Assistant Chatbot */}
+      <div className="no-print">
+        <PortalAssistantChat
+          open={portalChatOpen}
+          onOpenChange={setPortalChatOpen}
+          st={st}
+          language={form.language}
+          portalName={portalGuidance.primary.name}
+          hasActiveDraft={draftData !== null}
+          messages={portalChatMessages}
+          busy={portalChatBusy}
+          errorMessage={portalChatError}
+          onSendMessage={handleSendPortalChat}
+          onClearChat={() => {
+            setPortalChatMessages([]);
+            setPortalChatError(null);
+          }}
+          voiceUnsupportedText={t.voiceUnsupported}
+        />
+      </div>
     </div>
   );
 }

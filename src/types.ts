@@ -8,6 +8,8 @@ export type ComplaintCategory =
 
 export type StepId = "describe" | "clarify" | "review";
 
+export type SubmissionMode = "complaint" | "rti" | "escalation";
+
 export interface LanguageOption {
   name: string;
   nativeLabel: string;
@@ -27,6 +29,8 @@ export interface ChatMessage {
 }
 
 export interface ComplaintFormState {
+  mode: SubmissionMode;
+  previousTicketId: string;
   language: string;
   category: ComplaintCategory;
   state: string;
@@ -35,10 +39,64 @@ export interface ComplaintFormState {
   town: string;
   street: string;
   pincode: string;
+  gpsLat?: number;
+  gpsLng?: number;
   referenceNumber: string;
   name: string;
   contact: string;
   complaint: string;
+}
+
+export interface GpsLocationResult {
+  lat: number;
+  lng: number;
+  state: string;
+  district: string;
+  town: string;
+  street: string;
+  pincode: string;
+  formattedAddress: string;
+}
+
+export interface ScannedEvidenceResult {
+  issueSummary: string;
+  extractedReferenceNumber: string;
+  suggestedCategory: ComplaintCategory;
+  extractedLocationHint: string;
+}
+
+export interface EvidenceAttachment {
+  id: string;
+  name: string;
+  dataUrl: string;
+  originalSizeKb: number;
+  compressedSizeKb: number;
+  width: number;
+  height: number;
+}
+
+export type SavedComplaintStatus = "drafted" | "submitted" | "followup_due" | "resolved";
+
+export interface SavedComplaintRecord {
+  id: string;
+  createdAt: string;
+  mode: SubmissionMode;
+  language: string;
+  category: ComplaintCategory;
+  subject: string;
+  draft: string;
+  state: string;
+  district: string;
+  town: string;
+  street: string;
+  pincode: string;
+  referenceNumber: string;
+  portalName: string;
+  portalUrl: string;
+  portalHelpline?: string;
+  trackingId: string;
+  status: SavedComplaintStatus;
+  reminderDate: string;
 }
 
 export interface PortalEntry {
@@ -104,4 +162,5 @@ export interface PortalChatMessage {
   text: string;
   timestamp: string;
 }
+
 

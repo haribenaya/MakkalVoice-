@@ -2,6 +2,8 @@ import { useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
+  BookmarkCheck,
+  BookmarkPlus,
   Check,
   CheckCircle2,
   ClipboardList,
@@ -9,21 +11,34 @@ import {
   Download,
   ExternalLink,
   FileCheck2,
+  FileDown,
   Globe,
+  Mail,
   MessageSquare,
+  Printer,
   RefreshCw,
+  Share2,
   ShieldCheck,
 } from "lucide-react";
+import type { InnovationStrings } from "../data/innovationTranslations";
 import { PORTAL_LANGUAGE_SUPPORT } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
-import type { ComplaintFormState, DraftResponse, PortalGuidance } from "../types";
+import type {
+  ComplaintFormState,
+  DraftResponse,
+  EvidenceAttachment,
+  PortalGuidance,
+} from "../types";
 import { resolveEffectiveDistrict } from "../utils/api";
+import { downloadOfficialLetterPdf } from "../utils/mediaTools";
+import { EvidenceToolsPanel } from "./EvidenceToolsPanel";
 import { SubmissionGuideModal } from "./SubmissionGuideModal";
 
 interface DraftReviewProps {
   t: UiStrings;
   st: SubmissionUiStrings;
+  it: InnovationStrings;
   form: ComplaintFormState;
   draftData: DraftResponse;
   subject: string;
@@ -39,6 +54,10 @@ interface DraftReviewProps {
   busy: boolean;
   errorMessage: string | null;
   onOpenAssistant: (presetQuestion?: string) => void;
+  attachments: EvidenceAttachment[];
+  onAttachmentsChange: (next: EvidenceAttachment[]) => void;
+  isSavedToTracker: boolean;
+  onSaveToTracker: () => void;
 }
 
 function isSafeHttpsUrl(url: string): boolean {
@@ -88,6 +107,7 @@ async function copyStringToClipboard(text: string): Promise<void> {
 export function DraftReview({
   t,
   st,
+  it,
   form,
   draftData,
   subject,
@@ -103,6 +123,10 @@ export function DraftReview({
   busy,
   errorMessage,
   onOpenAssistant,
+  attachments,
+  onAttachmentsChange,
+  isSavedToTracker,
+  onSaveToTracker,
 }: DraftReviewProps) {
   const [copied, setCopied] = useState(false);
   const [copiedFieldKey, setCopiedFieldKey] = useState<string | null>(null);
@@ -160,6 +184,39 @@ export function DraftReview({
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    downloadOfficialLetterPdf({
+      subject,
+      draftText,
+      portalName: portalGuidance.primary.name,
+      referenceNumber: form.referenceNumber.trim() || undefined,
+      attachments,
+      filename: "makkalvoice-official-letter.pdf",
+    });
+    setCheckedSteps((prev) => ({ ...prev, 2: true }));
+  };
+
+  const handlePrintLetter = () => {
+    window.print();
+  };
+
+  const shareMessage = `${combinedCopyText}\n\nOfficial Portal: ${portalGuidance.primary.name} (${portalGuidance.primary.url})`;
+  const whatsAppHref = `https://wa.me/?text=${encodeURIComponent(shareMessage.slice(0, 3500))}`;
+  const mailtoHref = `mailto:?subject=${encodeURIComponent(subject.trim() || "Public Grievance Letter")}&body=${encodeURIComponent(shareMessage.slice(0, 3500))}`;
+  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
+
+  const handleNativeShare = async () => {
+    if (!canNativeShare) return;
+    try {
+      await navigator.share({
+        title: subject.trim() || "MakkalVoice Official Letter",
+        text: shareMessage,
+      });
+    } catch {
+      // User dismissed share sheet
+    }
   };
 
   const showLanguageToggle = userLanguage !== "English";
@@ -236,10 +293,38 @@ export function DraftReview({
 
   return (
     <div className="space-y-6">
+      {/* Clean A4 Printable Sheet (Visible ONLY when printing via window.print()) */}
+      <article className="hidden print-only-sheet text-black bg-white">
+        <div className="border-b-2 border-slate-900 pb-3 mb-5">
+          <h1 className="text-lg font-bold tracking-tight">
+            {subject.trim() || "OFFICIAL CITIZEN PETITION"}
+          </h1>
+          <p className="mt-1 text-xs text-slate-600">
+            {portalGuidance.primary.name}
+            {form.referenceNumber.trim() ? ` · Ref: ${form.referenceNumber.trim()}` : ""}
+          </p>
+        </div>
+        <div className="whitespace-pre-wrap text-[12pt] leading-relaxed font-sans">
+          {draftText}
+        </div>
+        {attachments.length > 0 && (
+          <div className="mt-8 pt-4 border-t border-slate-300 space-y-6">
+            {attachments.map((att, idx) => (
+              <figure key={att.id} className="break-inside-avoid">
+                <figcaption className="text-xs font-semibold mb-2">
+                  Annexure {idx + 1}: {att.name}
+                </figcaption>
+                <img src={att.dataUrl} alt={att.name} className="max-h-[210mm] w-auto object-contain" />
+              </figure>
+            ))}
+          </div>
+        )}
+      </article>
+
       {/* Main Draft Review Card */}
       <section
         aria-labelledby="review-heading"
-        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+        className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-slate-200/80">
           <div>
@@ -367,49 +452,126 @@ export function DraftReview({
             />
           </div>
 
-          {/* Primary Actions */}
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleCopy}
-              disabled={busy || !draftText.trim()}
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px] disabled:opacity-50"
-            >
-              {copied ? (
-                <>
-                  <Check className="w-4 h-4" aria-hidden="true" />
-                  {t.copiedSuccess}
-                </>
-              ) : (
-                <>
-                  <Copy className="w-4 h-4" aria-hidden="true" />
-                  {t.copyComplaint}
-                </>
+          {/* Primary Actions Row: Copy, A4 PDF, Print Official Letter, Download .txt, Save to Tracker, Regenerate */}
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleCopy}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+              >
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4" aria-hidden="true" />
+                    {t.copiedSuccess}
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" aria-hidden="true" />
+                    {t.copyComplaint}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadPdf}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+              >
+                <FileDown className="w-4 h-4" aria-hidden="true" />
+                {it.downloadOfficialPdf}
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePrintLetter}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+              >
+                <Printer className="w-4 h-4" aria-hidden="true" />
+                {it.printOfficialLetter}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadTxt}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" aria-hidden="true" />
+                {t.downloadTxt}
+              </button>
+
+              <button
+                type="button"
+                onClick={onSaveToTracker}
+                disabled={busy || !draftText.trim()}
+                className={`inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50 ${
+                  isSavedToTracker
+                    ? "bg-emerald-50 text-emerald-900 border-emerald-300"
+                    : "bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+                }`}
+              >
+                {isSavedToTracker ? (
+                  <>
+                    <BookmarkCheck className="w-4 h-4 text-emerald-700" aria-hidden="true" />
+                    {it.savedInTrackerBtn}
+                  </>
+                ) : (
+                  <>
+                    <BookmarkPlus className="w-4 h-4 text-blue-700" aria-hidden="true" />
+                    {it.saveToTrackerBtn}
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onRegenerate(draftLanguage)}
+                disabled={busy}
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${busy ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                {busy ? t.regenerating : t.regenerate}
+              </button>
+            </div>
+
+            {/* Family Share Row (WhatsApp / Email / Native Share — no window.open) */}
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+              <a
+                href={whatsAppHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-emerald-900 bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl transition-colors whitespace-nowrap"
+              >
+                <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {it.shareWhatsApp}
+              </a>
+
+              <a
+                href={mailtoHref}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors whitespace-nowrap"
+              >
+                <Mail className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                {it.shareEmail}
+              </a>
+
+              {canNativeShare && (
+                <button
+                  type="button"
+                  onClick={() => void handleNativeShare()}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-blue-800 bg-blue-50/70 hover:bg-blue-100 border border-blue-200/80 rounded-xl transition-colors whitespace-nowrap"
+                >
+                  <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  {it.sharePacketNative}
+                </button>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleDownloadTxt}
-              disabled={busy || !draftText.trim()}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px] disabled:opacity-50"
-            >
-              <Download className="w-4 h-4" aria-hidden="true" />
-              {t.downloadTxt}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onRegenerate(draftLanguage)}
-              disabled={busy}
-              className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px] disabled:opacity-50"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${busy ? "animate-spin" : ""}`}
-                aria-hidden="true"
-              />
-              {busy ? t.regenerating : t.regenerate}
-            </button>
+            </div>
           </div>
         </div>
 
@@ -449,7 +611,7 @@ export function DraftReview({
       {/* Verified Official Portal & Submission Checklist Card */}
       <section
         aria-labelledby="portal-guidance-heading"
-        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+        className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
         <div className="pb-5 border-b border-slate-200">
           <p className="text-xs font-medium text-emerald-700 flex items-center gap-1.5">
@@ -615,10 +777,10 @@ export function DraftReview({
         </p>
       </section>
 
-      {/* Dedicated Next Steps & Document Checklist Section at End of Draft Review */}
+      {/* Dedicated Next Steps, Documents Checklist, Evidence Compressor & Bilingual Portal Sheet */}
       <section
         aria-labelledby="next-steps-heading"
-        className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+        className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
       >
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 pb-6 border-b border-slate-200">
           <div>
@@ -726,6 +888,17 @@ export function DraftReview({
             {st.docFormatNote}
           </p>
         </div>
+
+        {/* Innovation 3: Portal-Ready Proof Photo Compressor & PDF Bundler */}
+        <EvidenceToolsPanel
+          it={it}
+          attachments={attachments}
+          onAttachmentsChange={onAttachmentsChange}
+          subject={subject}
+          draftText={draftText}
+          portalName={portalGuidance.primary.name}
+          referenceNumber={form.referenceNumber.trim() || undefined}
+        />
 
         {/* Ready-to-Paste Bilingual Portal Form Sheet + English Button Guide */}
         <div className="mt-6 pb-6 border-b border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6">

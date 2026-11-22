@@ -9,18 +9,22 @@ import {
   Download,
   ExternalLink,
   FileCheck2,
+  Globe,
   MessageSquare,
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import { PORTAL_LANGUAGE_SUPPORT } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
-import type { DraftResponse, PortalGuidance } from "../types";
+import type { ComplaintFormState, DraftResponse, PortalGuidance } from "../types";
+import { resolveEffectiveDistrict } from "../utils/api";
 import { SubmissionGuideModal } from "./SubmissionGuideModal";
 
 interface DraftReviewProps {
   t: UiStrings;
   st: SubmissionUiStrings;
+  form: ComplaintFormState;
   draftData: DraftResponse;
   subject: string;
   draftText: string;
@@ -46,9 +50,45 @@ function isSafeHttpsUrl(url: string): boolean {
   }
 }
 
+function getPortalLanguageNoticeText(
+  portalId: string | undefined,
+  aiTip: string | undefined,
+  st: SubmissionUiStrings,
+): string {
+  if (aiTip && aiTip.trim()) return aiTip.trim();
+  const support = portalId ? PORTAL_LANGUAGE_SUPPORT[portalId] : undefined;
+  switch (support?.supportedNoteKey) {
+    case "tamilAndEnglish":
+      return st.portalLangTamilAndEnglish;
+    case "hindiAndEnglish":
+      return st.portalLangHindiAndEnglish;
+    case "multiIndian":
+      return st.portalLangMultiIndian;
+    default:
+      return st.portalLangEnglishOnly;
+  }
+}
+
+async function copyStringToClipboard(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const el = document.createElement("textarea");
+    el.value = text;
+    el.setAttribute("readonly", "");
+    el.style.position = "absolute";
+    el.style.left = "-9999px";
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand("copy");
+    document.body.removeChild(el);
+  }
+}
+
 export function DraftReview({
   t,
   st,
+  form,
   draftData,
   subject,
   draftText,
@@ -65,6 +105,7 @@ export function DraftReview({
   onOpenAssistant,
 }: DraftReviewProps) {
   const [copied, setCopied] = useState(false);
+  const [copiedFieldKey, setCopiedFieldKey] = useState<string | null>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({
@@ -94,22 +135,19 @@ export function DraftReview({
   };
 
   const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(combinedCopyText);
-    } catch {
-      const el = document.createElement("textarea");
-      el.value = combinedCopyText;
-      el.setAttribute("readonly", "");
-      el.style.position = "absolute";
-      el.style.left = "-9999px";
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand("copy");
-      document.body.removeChild(el);
-    }
+    await copyStringToClipboard(combinedCopyText);
     setCopied(true);
     setCheckedSteps((prev) => ({ ...prev, 2: true }));
     setTimeout(() => setCopied(false), 2200);
+  };
+
+  const handleCopyField = async (key: string, value: string) => {
+    if (!value.trim()) return;
+    await copyStringToClipboard(value.trim());
+    setCopiedFieldKey(key);
+    setTimeout(() => {
+      setCopiedFieldKey((prev) => (prev === key ? null : prev));
+    }, 1800);
   };
 
   const handleDownloadTxt = () => {
@@ -128,6 +166,73 @@ export function DraftReview({
   const wordCount = draftText.trim() ? draftText.trim().split(/\s+/).length : 0;
   const docs = portalGuidance.requiredDocuments;
   const preparedDocCount = docs.filter((d) => checkedDocs[d.id]).length;
+  const portalLanguageNotice = getPortalLanguageNoticeText(
+    portalGuidance.primary.id,
+    portalGuidance.portalLanguageTip,
+    st,
+  );
+
+  const effectiveDistrict = resolveEffectiveDistrict(form);
+  const fullAddressEnglish = [
+    form.street.trim(),
+    form.town.trim(),
+    effectiveDistrict,
+    form.state.trim(),
+    form.pincode.trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const portalCopyRows = [
+    {
+      key: "name",
+      localLabel: st.requiredNameLabel,
+      englishBox: "Applicant / Complainant Name",
+      value: form.name.trim(),
+    },
+    {
+      key: "phone",
+      localLabel: st.requiredPhoneLabel,
+      englishBox: "Mobile Number",
+      value: form.contact.trim(),
+    },
+    {
+      key: "state",
+      localLabel: t.stateLabel,
+      englishBox: "State / UT",
+      value: form.state.trim(),
+    },
+    {
+      key: "district",
+      localLabel: t.districtLabel,
+      englishBox: "District",
+      value: effectiveDistrict,
+    },
+    {
+      key: "address",
+      localLabel: `${t.townLabel} / ${t.streetLabel}`,
+      englishBox: "Address / Location",
+      value: fullAddressEnglish,
+    },
+    {
+      key: "pincode",
+      localLabel: st.pincodeLabel,
+      englishBox: "Pincode",
+      value: form.pincode.trim(),
+    },
+    {
+      key: "ref",
+      localLabel: st.referenceNumberLabel,
+      englishBox: "Consumer / Reference / PNR No.",
+      value: form.referenceNumber.trim(),
+    },
+    {
+      key: "subject",
+      localLabel: t.subjectLabel,
+      englishBox: "Grievance Subject",
+      value: subject.trim(),
+    },
+  ].filter((row) => row.value.length > 0);
 
   return (
     <div className="space-y-6">
@@ -423,6 +528,16 @@ export function DraftReview({
                   </p>
                 )}
               </div>
+
+              <div className="mt-3.5 pt-3 border-t border-slate-200/80 flex items-start gap-2 text-xs text-slate-700 leading-relaxed">
+                <Globe className="w-3.5 h-3.5 text-blue-700 mt-0.5 shrink-0" aria-hidden="true" />
+                <p>
+                  <strong className="font-semibold text-slate-900">
+                    {st.portalLanguageNoticeTitle}:
+                  </strong>{" "}
+                  {portalLanguageNotice}
+                </p>
+              </div>
             </div>
 
             {isSafeHttpsUrl(portalGuidance.primary.url) && (
@@ -612,6 +727,91 @@ export function DraftReview({
           </p>
         </div>
 
+        {/* Ready-to-Paste Bilingual Portal Form Sheet + English Button Guide */}
+        <div className="mt-6 pb-6 border-b border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* 1-Tap Copy Form Fields for English Government Portals */}
+          <div className="lg:col-span-7">
+            <h3 className="text-sm sm:text-base font-semibold text-slate-950">
+              {st.portalFormSheetTitle}
+            </h3>
+            <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
+              {st.portalFormSheetSubtitle}
+            </p>
+
+            <div className="mt-3.5 border border-slate-200 rounded-xl divide-y divide-slate-200/80 overflow-hidden bg-slate-50/40">
+              {portalCopyRows.map((row) => {
+                const isRowCopied = copiedFieldKey === row.key;
+                return (
+                  <div
+                    key={row.key}
+                    className="px-3.5 py-3 flex items-center justify-between gap-3 bg-white"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-slate-500">
+                        <span className="font-medium text-slate-700">{row.localLabel}</span>
+                        <span className="mx-1.5 text-slate-300" aria-hidden="true">→</span>
+                        <span className="font-mono text-[11px] text-blue-700">{row.englishBox}</span>
+                      </p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-950 break-words">
+                        {row.value}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyField(row.key, row.value)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 min-h-[36px]"
+                    >
+                      {isRowCopied ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                          <span className="text-emerald-800">{st.copiedFieldBtn}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span>{st.copyFieldBtn}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bilingual English Portal Button Guide */}
+          <div className="lg:col-span-5 flex flex-col justify-between gap-4">
+            <div className="p-4 sm:p-5 rounded-xl border border-blue-200/70 bg-blue-50/35">
+              <h3 className="text-sm font-semibold text-slate-950">
+                {st.buttonGuideTitle}
+              </h3>
+              <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                {st.buttonGuideSubtitle}
+              </p>
+
+              <ul className="mt-3.5 space-y-2.5 text-xs sm:text-sm">
+                {portalGuidance.englishButtonGuide.map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="pb-2.5 border-b border-blue-200/50 last:border-b-0 last:pb-0"
+                  >
+                    <p className="font-mono text-xs font-semibold text-slate-950">
+                      {item.englishLabel}
+                    </p>
+                    <p className="mt-0.5 text-slate-700 leading-relaxed">
+                      {item.localMeaning}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
+              {st.otpSubmissionNote}
+            </p>
+          </div>
+        </div>
+
         {/* Tailored Step-by-Step Portal Filing Guide + Originality Checklist */}
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {portalGuidance.filingSteps && portalGuidance.filingSteps.length > 0 && (
@@ -673,6 +873,7 @@ export function DraftReview({
         subject={subject}
         draftText={draftText}
         portalGuidance={portalGuidance}
+        portalLanguageNotice={portalLanguageNotice}
         checkedDocs={checkedDocs}
         onToggleDoc={toggleDoc}
         checkedSteps={checkedSteps}

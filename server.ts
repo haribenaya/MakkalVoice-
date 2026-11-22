@@ -3,7 +3,6 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
 import {
   getPortalCatalogSummaryForPrompt,
@@ -44,6 +43,8 @@ interface FollowupRequestBody {
   district?: string;
   town?: string;
   street?: string;
+  pincode?: string;
+  referenceNumber?: string;
   complaint?: string;
   answers?: AnswerItem[];
   askedQuestions?: string[];
@@ -234,6 +235,7 @@ function buildLocationSummary(body: FollowupRequestBody): string {
     cleanText(body.town, 120),
     cleanText(body.district, 120),
     cleanText(body.state, 120),
+    cleanText(body.pincode, 12),
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(", ") : "Not specified yet";
 }
@@ -468,6 +470,8 @@ async function startServer() {
       const district = cleanText(body.district, 100);
       const town = cleanText(body.town, 120);
       const street = cleanText(body.street, 200);
+      const pincode = cleanText(body.pincode, 12);
+      const referenceNumber = cleanText(body.referenceNumber, 80);
       const locationSummary = buildLocationSummary(body);
 
       if (!complaint || complaint.length < 6) {
@@ -504,7 +508,7 @@ async function startServer() {
         "PART B — Exact Official Portal Selection, Filing Steps & Document Checklist:",
         "5. From the VERIFIED PORTAL CATALOG provided in the prompt, choose the EXACT best 'primaryPortalId' and 'secondaryPortalId' that match BOTH the specific topic (e.g., electricity -> state electricity board like tangedco_tn/bescom_karnataka/mahavitaran_mh; Chennai water/sewage -> cmwssb_chennai; Chennai streetlight/road -> gcc_chennai; railway -> railmadad; bank/UPI -> rbi_cms; cyber scam -> cybercrime_india; consumer bill -> national_consumer; legal aid -> nalsa_legal; state civic/ration/pension -> state grievance portal; central escalation -> cpgrams) AND the citizen's state/district.",
         "6. ONLY return IDs that appear verbatim in the VERIFIED PORTAL CATALOG.",
-        `7. Write 'suggestedAuthority', 'summaryPoints', 'whyThisPortal', 'filingSteps' (4-5 clear, actionable steps explaining how to log in, pick the right department/category, paste the draft, upload attachments, and save the tracking number on that exact portal), and 'requiredDocuments' (4-5 practical supporting documents/proofs the citizen may need to attach for this exact complaint type and portal, each with 'title', short helpful 'detail', and boolean 'mandatory') strictly in ${uiLanguage} so the user understands everything easily in their chosen dashboard language.`,
+        `7. Write 'suggestedAuthority', 'summaryPoints', 'whyThisPortal', 'portalLanguageTip' (1 concise sentence in ${uiLanguage} telling the citizen whether the selected official portal offers a language switch button such as Tamil/Hindi or is mostly in English and reminding them they can copy-paste each prepared English field directly), 'filingSteps' (4-5 clear, actionable steps explaining how to log in, pick the right department/category, paste the draft, upload attachments, and save the tracking number on that exact portal), 'requiredDocuments' (4-5 practical supporting documents/proofs the citizen may need to attach for this exact complaint type and portal, each with 'title', short helpful 'detail', and boolean 'mandatory'), and 'englishButtonGuide' (5-6 objects mapping exact English button/field labels the citizen will see on that government portal — like 'Register / Lodge Grievance', 'Mobile OTP', 'Select Department', 'Grievance Description', 'Upload Document', 'Submit' — to clear, simple meanings in ${uiLanguage}) strictly in ${uiLanguage}.`,
       ].join("\n");
 
       const prompt = [
@@ -517,6 +521,8 @@ async function startServer() {
         `District: ${district || "Not specified"}`,
         `Town / Area: ${town || "Not specified"}`,
         `Street / Landmark: ${street || "Not specified"}`,
+        `Pincode: ${pincode || "Not specified"}`,
+        `Reference / Consumer / Bill / PNR / Application Number: ${referenceNumber || "None provided"}`,
         `Combined Location: ${locationSummary}`,
         `Citizen's Original Statement:\n"""${complaint}"""`,
         `Clarification Q&A:\n${qaSection}`,
@@ -553,6 +559,10 @@ async function startServer() {
                   type: Type.STRING,
                   description: `Short 1-2 sentence explanation in ${uiLanguage} of why this official portal is the correct place for this complaint.`,
                 },
+                portalLanguageTip: {
+                  type: Type.STRING,
+                  description: `1 clear sentence in ${uiLanguage} telling the citizen if this government portal has a regional language switcher or is English-only, and how to use the prepared English fields.`,
+                },
                 filingSteps: {
                   type: Type.ARRAY,
                   items: { type: Type.STRING },
@@ -571,6 +581,18 @@ async function startServer() {
                   },
                   description: `4-5 supporting documents, photos, bills, or IDs in ${uiLanguage} that the citizen may need to attach when filing on the matched portal.`,
                 },
+                englishButtonGuide: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      englishLabel: { type: Type.STRING },
+                      localMeaning: { type: Type.STRING },
+                    },
+                    required: ["englishLabel", "localMeaning"],
+                  },
+                  description: `5-6 exact English portal buttons or form headings paired with their clear meaning in ${uiLanguage}.`,
+                },
               },
               required: [
                 "subject",
@@ -580,8 +602,10 @@ async function startServer() {
                 "primaryPortalId",
                 "secondaryPortalId",
                 "whyThisPortal",
+                "portalLanguageTip",
                 "filingSteps",
                 "requiredDocuments",
+                "englishButtonGuide",
               ],
             },
           },
@@ -600,8 +624,10 @@ async function startServer() {
         primaryPortalId?: string;
         secondaryPortalId?: string;
         whyThisPortal?: string;
+        portalLanguageTip?: string;
         filingSteps?: unknown;
         requiredDocuments?: unknown;
+        englishButtonGuide?: unknown;
       };
 
       const draft = cleanMultilineText(parsed.draft, 8000);
@@ -652,6 +678,17 @@ async function startServer() {
             .slice(0, 6)
         : [];
 
+      const englishButtonGuide = Array.isArray(parsed.englishButtonGuide)
+        ? parsed.englishButtonGuide
+            .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+            .map((item) => ({
+              englishLabel: cleanText(item.englishLabel, 100),
+              localMeaning: cleanText(item.localMeaning, 180),
+            }))
+            .filter((item) => item.englishLabel.length > 0 && item.localMeaning.length > 0)
+            .slice(0, 6)
+        : [];
+
       res.json({
         subject: cleanText(parsed.subject, 240),
         draft,
@@ -661,8 +698,10 @@ async function startServer() {
         primaryPortalId,
         secondaryPortalId,
         whyThisPortal: cleanText(parsed.whyThisPortal, 400),
+        portalLanguageTip: cleanText(parsed.portalLanguageTip, 320),
         filingSteps,
         requiredDocuments,
+        englishButtonGuide,
       });
     } catch (error) {
       console.error("[/api/complaint-draft] error:", error);
@@ -801,6 +840,7 @@ async function startServer() {
   const distDir = path.resolve(__dirname, "dist");
 
   if (!isProd || !fs.existsSync(distDir)) {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",

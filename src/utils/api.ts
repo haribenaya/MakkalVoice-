@@ -34,6 +34,8 @@ export function buildPrivacySafePayload(
     district: resolveEffectiveDistrict(form),
     town: form.town.trim(),
     street: form.street.trim(),
+    pincode: form.pincode.trim(),
+    referenceNumber: form.referenceNumber.trim(),
     complaint: form.complaint.trim(),
     ...extras,
   };
@@ -131,8 +133,10 @@ export async function requestComplaintDraft(
     primaryPortalId: raw.primaryPortalId ?? "cpgrams",
     secondaryPortalId: raw.secondaryPortalId,
     whyThisPortal: raw.whyThisPortal ?? "",
+    portalLanguageTip: typeof raw.portalLanguageTip === "string" ? raw.portalLanguageTip : "",
     filingSteps: Array.isArray(raw.filingSteps) ? raw.filingSteps : [],
     requiredDocuments: Array.isArray(raw.requiredDocuments) ? raw.requiredDocuments : [],
+    englishButtonGuide: Array.isArray(raw.englishButtonGuide) ? raw.englishButtonGuide : [],
   };
 }
 

@@ -61,6 +61,26 @@ export interface SubmissionUiStrings {
   errMissingName: string;
   errInvalidPhone: string;
   privacyRequiredLocalDesc: string;
+  // Portal-needed extra fields & aligned Step 1 parts
+  step1Part1Title: string;
+  pincodeLabel: string;
+  pincodePlaceholder: string;
+  referenceNumberLabel: string;
+  referenceNumberPlaceholder: string;
+  // Portal language availability & English-only portal bridge
+  portalLanguageNoticeTitle: string;
+  portalLangTamilAndEnglish: string;
+  portalLangHindiAndEnglish: string;
+  portalLangMultiIndian: string;
+  portalLangEnglishOnly: string;
+  portalFormSheetTitle: string;
+  portalFormSheetSubtitle: string;
+  copyFieldBtn: string;
+  copiedFieldBtn: string;
+  buttonGuideTitle: string;
+  buttonGuideSubtitle: string;
+  otpSubmissionNote: string;
+  chatYouLabel: string;
 }
 
 const EN: SubmissionUiStrings = {
@@ -133,6 +153,27 @@ const EN: SubmissionUiStrings = {
   errInvalidPhone: "Please enter a valid 10-digit phone number before continuing.",
   privacyRequiredLocalDesc:
     "Your name and phone number are filled into your complaint locally in your browser and are never sent to AI.",
+  step1Part1Title: "Describe your problem (Voice or Typing)",
+  pincodeLabel: "Pincode (optional)",
+  pincodePlaceholder: "e.g., 600042",
+  referenceNumberLabel: "Consumer / Bill / PNR / Application No. (if any)",
+  referenceNumberPlaceholder: "Optional — speeds up official portal filing",
+  portalLanguageNoticeTitle: "Portal Language Info",
+  portalLangTamilAndEnglish: "Portal offers Tamil & English language switch at top",
+  portalLangHindiAndEnglish: "Portal offers Hindi & English language switch (mostly English forms)",
+  portalLangMultiIndian: "Portal supports multiple Indian languages via top language menu",
+  portalLangEnglishOnly: "External government portal is in English — use our 1-tap copy sheet & button guide below",
+  portalFormSheetTitle: "Ready-to-Paste Portal Form Fields",
+  portalFormSheetSubtitle:
+    "Government portals ask for details in English boxes. Tap Copy beside each field and paste directly into the matching English box on the portal.",
+  copyFieldBtn: "Copy",
+  copiedFieldBtn: "Copied",
+  buttonGuideTitle: "English Portal Button Guide",
+  buttonGuideSubtitle:
+    "What the English buttons and headings on the external government portal mean:",
+  otpSubmissionNote:
+    "Official Indian government portals require direct citizen OTP and CAPTCHA verification to issue a real tracking ID. MakkalVoice prepares every English field and button translation so you can finish in minutes.",
+  chatYouLabel: "You",
 };
 
 const TA: SubmissionUiStrings = {
@@ -206,6 +247,27 @@ const TA: SubmissionUiStrings = {
   errInvalidPhone: "தொடர்வதற்கு முன் சரியான 10 இலக்க தொலைபேசி எண்ணை உள்ளிடவும்.",
   privacyRequiredLocalDesc:
     "உங்கள் பெயர் மற்றும் தொலைபேசி எண் உங்கள் சாதனத்திலேயே கடிதத்தில் சேர்க்கப்படும் — AI-க்கு அனுப்பப்படாது.",
+  step1Part1Title: "உங்கள் பிரச்சனையைப் பேசுங்கள் அல்லது தட்டச்சு செய்யுங்கள்",
+  pincodeLabel: "அஞ்சல் குறியீடு / Pincode (விருப்பம்)",
+  pincodePlaceholder: "உதா: 600042",
+  referenceNumberLabel: "நுகர்வோர் / பில் / PNR / விண்ணப்ப எண் (இருந்தால்)",
+  referenceNumberPlaceholder: "விருப்பம் — போர்ட்டலில் புகார் பதிய உதவும்",
+  portalLanguageNoticeTitle: "போர்ட்டல் மொழித் தகவல்",
+  portalLangTamilAndEnglish: "இந்த அரசு போர்ட்டலில் மேல் பகுதியில் தமிழ் / English மொழி மாற்றும் வசதி உள்ளது",
+  portalLangHindiAndEnglish: "இந்த மத்திய அரசு போர்ட்டல் ஆங்கிலம் / ஹிந்தியில் இருக்கும் — கீழே உள்ள தமிழ் வழிகாட்டியைப் பயன்படுத்தி எளிதாகச் சமர்ப்பிக்கலாம்",
+  portalLangMultiIndian: "இந்தப் போர்ட்டலின் மேல் மெனுவில் தமிழ் உட்பட இந்திய மொழிகளைத் தேர்ந்தெடுக்கலாம்",
+  portalLangEnglishOnly: "இந்த அரசு போர்ட்டல் ஆங்கிலத்தில் மட்டுமே உள்ளது — கீழே உள்ள 1-தட்டல் நகலெடுப்பு & தமிழ் பொத்தான் வழிகாட்டியைப் பயன்படுத்தவும்",
+  portalFormSheetTitle: "அரசு போர்ட்டலில் ஒட்டத் தயாரான படிவ விவரங்கள்",
+  portalFormSheetSubtitle:
+    "அரசு போர்ட்டல் ஆங்கிலத்தில் விவரங்களைக் கேட்கும். ஒவ்வொரு வரிக்கும் அருகில் உள்ள 'நகலெடு' பொத்தானைத் தட்டி, அதே ஆங்கிலப் பெட்டியில் ஒட்டவும் (Paste).",
+  copyFieldBtn: "நகலெடு",
+  copiedFieldBtn: "நகலெடுக்கப்பட்டது",
+  buttonGuideTitle: "ஆங்கில போர்ட்டல் பொத்தான்களின் தமிழ் அர்த்தம்",
+  buttonGuideSubtitle:
+    "அரசு இணையதளத்தில் காணப்படும் ஆங்கில பொத்தான்களும் அவற்றின் எளிய தமிழ் விளக்கமும்:",
+  otpSubmissionNote:
+    "அதிகாரப்பூர்வ அரசு போர்ட்டல்களில் உங்கள் மொபைல் OTP மற்றும் CAPTCHA சரிபார்ப்பு தேவைப்படுவதால், இறுதி சமர்ப்பிப்பை நீங்களே அங்கே செய்ய வேண்டும். அதற்கான அனைத்து ஆங்கில விவரங்களையும் தமிழ் விளக்கத்தையும் MakkalVoice தயாராகக் கொடுத்துள்ளது.",
+  chatYouLabel: "நீங்கள்",
 };
 
 const HI: SubmissionUiStrings = {
@@ -279,6 +341,27 @@ const HI: SubmissionUiStrings = {
   errInvalidPhone: "आगे बढ़ने से पहले कृपया सही 10 अंकों का फ़ोन नंबर लिखें।",
   privacyRequiredLocalDesc:
     "आपका नाम और फ़ोन नंबर आपके ब्राउज़र में ही शिकायत पत्र में जोड़े जाते हैं और कभी AI को नहीं भेजे जाते।",
+  step1Part1Title: "अपनी समस्या बोलकर या लिखकर बताएं",
+  pincodeLabel: "पिनकोड / Pincode (वैकल्पिक)",
+  pincodePlaceholder: "उदा. 110001",
+  referenceNumberLabel: "उपभोक्ता / बिल / PNR / आवेदन संख्या (यदि हो)",
+  referenceNumberPlaceholder: "वैकल्पिक — पोर्टल पर दर्ज करने में मददगार",
+  portalLanguageNoticeTitle: "पोर्टल की भाषा जानकारी",
+  portalLangTamilAndEnglish: "इस राज्य पोर्टल में तमिल और अंग्रेज़ी भाषा चुनने का विकल्प उपलब्ध है",
+  portalLangHindiAndEnglish: "इस सरकारी पोर्टल के ऊपर हिंदी और अंग्रेज़ी भाषा बदलने का विकल्प है",
+  portalLangMultiIndian: "इस पोर्टल के भाषा मेनू में कई भारतीय भाषाएँ उपलब्ध हैं",
+  portalLangEnglishOnly: "यह सरकारी पोर्टल अंग्रेज़ी में है — नीचे दिए गए 1-टैप कॉपी फ़ील्ड और हिंदी बटन गाइड का उपयोग करें",
+  portalFormSheetTitle: "पोर्टल फ़ॉर्म में पेस्ट करने के लिए तैयार विवरण",
+  portalFormSheetSubtitle:
+    "सरकारी पोर्टल अंग्रेज़ी बॉक्स में जानकारी मांगते हैं। हर फ़ील्ड के सामने 'कॉपी' दबाएं और पोर्टल के उसी अंग्रेज़ी बॉक्स में पेस्ट करें।",
+  copyFieldBtn: "कॉपी",
+  copiedFieldBtn: "कॉपी हुआ",
+  buttonGuideTitle: "अंग्रेज़ी पोर्टल बटनों का हिंदी अर्थ",
+  buttonGuideSubtitle:
+    "सरकारी वेबसाइट पर दिखने वाले अंग्रेज़ी बटनों और शीर्षकों का सरल अर्थ:",
+  otpSubmissionNote:
+    "आधिकारिक सरकारी पोर्टल पर असली ट्रैकिंग नंबर पाने के लिए आपका मोबाइल OTP और CAPTCHA सत्यापन आवश्यक होता है। MakkalVoice हर अंग्रेज़ी फ़ील्ड और बटन का अनुवाद तैयार रखता है ताकि आप मिनटों में शिकायत जमा कर सकें।",
+  chatYouLabel: "आप",
 };
 
 const TE: SubmissionUiStrings = {
@@ -341,6 +424,21 @@ const TE: SubmissionUiStrings = {
   errInvalidPhone: "కొనసాగే ముందు దయచేసి సరైన 10 అంకెల ఫోన్ నంబర్‌ను నమోదు చేయండి.",
   privacyRequiredLocalDesc:
     "మీ పేరు మరియు ఫోన్ నంబర్ మీ బ్రౌజర్‌లోనే ఫిర్యాదులో చేర్చబడతాయి — AI కి పంపబడవు.",
+  step1Part1Title: "మీ సమస్యను మాట్లాడి లేదా టైప్ చేసి చెప్పండి",
+  pincodeLabel: "పిన్‌కోడ్ / Pincode (ఐచ్ఛికం)",
+  pincodePlaceholder: "ఉదా: 500001",
+  referenceNumberLabel: "బిల్లు / కన్స్యూమర్ / PNR / దరఖాస్తు నంబర్ (ఉంటే)",
+  referenceNumberPlaceholder: "ఐచ్ఛికం — పోర్టల్‌లో త్వరగా నమోదు చేయడానికి",
+  portalLanguageNoticeTitle: "పోర్టల్ భాష సమాచారం",
+  portalLangTamilAndEnglish: "ఈ పోర్టల్‌లో తమిళం మరియు ఇంగ్లీష్ భాషా ఎంపిక ఉంది",
+  portalLangHindiAndEnglish: "ఈ పోర్టల్ ఇంగ్లీష్ / హిందీలో ఉంటుంది — క్రింది తెలుగు గైడ్‌తో సులభంగా సమర్పించవచ్చు",
+  portalLangMultiIndian: "ఈ పోర్టల్‌లో పలు భారతీయ భాషల ఎంపిక అందుబాటులో ఉంది",
+  portalLangEnglishOnly: "ఈ ప్రభుత్వ పోర్టల్ ఇంగ్లీష్‌లో ఉంటుంది — క్రింది 1-ట్యాప్ కాపీ ఫీల్డ్స్ ఉపయోగించండి",
+  portalFormSheetTitle: "పోర్టల్ ఫారమ్‌లో పేస్ట్ చేయడానికి సిద్ధమైన వివరాలు",
+  copyFieldBtn: "కాపీ",
+  copiedFieldBtn: "కాపీ అయింది",
+  buttonGuideTitle: "ఇంగ్లీష్ పోర్టల్ బటన్ల తెలుగు అర్థం",
+  chatYouLabel: "మీరు",
 };
 
 const KN: SubmissionUiStrings = {
@@ -397,6 +495,17 @@ const KN: SubmissionUiStrings = {
   errInvalidPhone: "ಮುಂದುವರಿಯುವ ಮೊದಲು ದಯವಿಟ್ಟು ಮಾನ್ಯವಾದ 10 ಅಂಕಿಯ ಫೋನ್ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.",
   privacyRequiredLocalDesc:
     "ನಿಮ್ಮ ಹೆಸರು ಮತ್ತು ಫೋನ್ ಸಂಖ್ಯೆಯನ್ನು ನಿಮ್ಮ ಬ್ರೌಸರ್‌ನಲ್ಲೇ ಪತ್ರದಲ್ಲಿ ಸೇರಿಸಲಾಗುತ್ತದೆ — AI ಗೆ ಕಳುಹಿಸಲಾಗುವುದಿಲ್ಲ.",
+  step1Part1Title: "ನಿಮ್ಮ ಸಮಸ್ಯೆಯನ್ನು ಮಾತನಾಡಿ ಅಥವಾ ಟೈಪ್ ಮಾಡಿ",
+  pincodeLabel: "ಪಿನ್‌ಕೋಡ್ / Pincode (ಐಚ್ಛಿಕ)",
+  pincodePlaceholder: "ಉದಾ: 560001",
+  referenceNumberLabel: "ಬಿಲ್ / ಗ್ರಾಹಕ / PNR / ಅರ್ಜಿ ಸಂಖ್ಯೆ (ಇದ್ದರೆ)",
+  portalLanguageNoticeTitle: "ಪೋರ್ಟಲ್ ಭಾಷಾ ಮಾಹಿತಿ",
+  portalLangEnglishOnly: "ಈ ಸರ್ಕಾರಿ ಪೋರ್ಟಲ್ ಇಂಗ್ಲಿಷ್‌ನಲ್ಲಿದೆ — ಕೆಳಗಿನ 1-ಟ್ಯಾಪ್ ಕಾಪಿ ವಿವರಗಳನ್ನು ಬಳಸಿ",
+  portalFormSheetTitle: "ಪೋರ್ಟಲ್ ಫಾರ್ಮ್‌ಗೆ ಸಿದ್ಧಪಡಿಸಿದ ವಿವರಗಳು",
+  copyFieldBtn: "ಕಾಪಿ",
+  copiedFieldBtn: "ಕಾಪಿ ಆಗಿದೆ",
+  buttonGuideTitle: "ಇಂಗ್ಲಿಷ್ ಪೋರ್ಟಲ್ ಬಟನ್‌ಗಳ ಕನ್ನಡ ಅರ್ಥ",
+  chatYouLabel: "ನೀವು",
 };
 
 const ML: SubmissionUiStrings = {
@@ -453,6 +562,16 @@ const ML: SubmissionUiStrings = {
   errInvalidPhone: "തുടരുന്നതിന് മുമ്പ് സാധുവായ 10 അക്ക ഫോൺ നമ്പർ നൽകുക.",
   privacyRequiredLocalDesc:
     "നിങ്ങളുടെ പേരും ഫോൺ നമ്പറും നിങ്ങളുടെ ബ്രൗസറിൽ തന്നെ കത്തിൽ ചേർക്കും — AI-ലേക്ക് അയക്കില്ല.",
+  step1Part1Title: "നിങ്ങളുടെ പ്രശ്നം സംസാരിക്കുകയോ ടൈപ്പ് ചെയ്യുകയോ ചെയ്യുക",
+  pincodeLabel: "പിൻകോഡ് / Pincode (ഐച്ഛികം)",
+  pincodePlaceholder: "ഉദാ: 682001",
+  referenceNumberLabel: "ബിൽ / കൺസ്യൂമർ / PNR / അപേക്ഷ നമ്പർ (ഉണ്ടെങ്കിൽ)",
+  portalLanguageNoticeTitle: "പോർട്ടൽ ഭാഷാ വിവരം",
+  portalFormSheetTitle: "പോർട്ടൽ ഫോമിൽ പേസ്റ്റ് ചെയ്യാനുള്ള വിവരങ്ങൾ",
+  copyFieldBtn: "കോപ്പി",
+  copiedFieldBtn: "കോപ്പി ചെയ്തു",
+  buttonGuideTitle: "ഇംഗ്ലീഷ് പോർട്ടൽ ബട്ടണുകളുടെ മലയാളം അർത്ഥം",
+  chatYouLabel: "നിങ്ങൾ",
 };
 
 const BN: SubmissionUiStrings = {
@@ -509,6 +628,15 @@ const BN: SubmissionUiStrings = {
   errInvalidPhone: "এগিয়ে যাওয়ার আগে অনুগ্রহ করে একটি সঠিক ১০ সংখ্যার ফোন নম্বর লিখুন।",
   privacyRequiredLocalDesc:
     "আপনার নাম ও ফোন নম্বর আপনার ব্রাউজারেই চিঠিতে যুক্ত হয় এবং কখনো AI-তে পাঠানো হয় না।",
+  step1Part1Title: "আপনার সমস্যা বলুন বা টাইপ করুন",
+  pincodeLabel: "পিনকোড / Pincode (ঐচ্ছিক)",
+  referenceNumberLabel: "বিল / কনজিউমার / PNR / আবেদন নম্বর (যদি থাকে)",
+  portalLanguageNoticeTitle: "পোর্টালের ভাষা তথ্য",
+  portalFormSheetTitle: "পোর্টালে পেস্ট করার জন্য প্রস্তুত তথ্য",
+  copyFieldBtn: "কপি",
+  copiedFieldBtn: "কপি হয়েছে",
+  buttonGuideTitle: "ইংরেজি পোর্টাল বাটনের বাংলা অর্থ",
+  chatYouLabel: "আপনি",
 };
 
 const MR: SubmissionUiStrings = {
@@ -565,6 +693,15 @@ const MR: SubmissionUiStrings = {
   errInvalidPhone: "पुढे जाण्यापूर्वी कृपया वैध १० अंकी फोन नंबर लिहा.",
   privacyRequiredLocalDesc:
     "तुमचे नाव आणि फोन नंबर तुमच्या ब्राउझरमध्येच पत्रात जोडले जातात आणि कधीही AI कडे पाठवले जात नाहीत.",
+  step1Part1Title: "तुमची समस्या बोलून किंवा टाइप करून सांगा",
+  pincodeLabel: "पिनकोड / Pincode (ऐच्छिक)",
+  referenceNumberLabel: "बिल / ग्राहक / PNR / अर्ज क्रमांक (असल्यास)",
+  portalLanguageNoticeTitle: "पोर्टल भाषा माहिती",
+  portalFormSheetTitle: "पोर्टल फॉर्ममध्ये पेस्ट करण्यासाठी तयार माहिती",
+  copyFieldBtn: "कॉपी",
+  copiedFieldBtn: "कॉपी झाले",
+  buttonGuideTitle: "इंग्रजी पोर्टल बटनांचा मराठी अर्थ",
+  chatYouLabel: "तुम्ही",
 };
 
 const GU: SubmissionUiStrings = {
@@ -621,6 +758,15 @@ const GU: SubmissionUiStrings = {
   errInvalidPhone: "આગળ વધતા પહેલા કૃપા કરીને માન્ય 10 અંકનો ફોન નંબર લખો.",
   privacyRequiredLocalDesc:
     "તમારું નામ અને ફોન નંબર તમારા બ્રાઉઝરમાં જ ફરિયાદ પત્રમાં ઉમેરાય છે અને ક્યારેય AI ને મોકલાતા નથી.",
+  step1Part1Title: "તમારી સમસ્યા બોલીને અથવા લખીને જણાવો",
+  pincodeLabel: "પિનકોડ / Pincode (વૈકલ્પિક)",
+  referenceNumberLabel: "બિલ / ગ્રાહક / PNR / અરજી નંબર (જો હોય)",
+  portalLanguageNoticeTitle: "પોર્ટલ ભાષા માહિતી",
+  portalFormSheetTitle: "પોર્ટલમાં પેસ્ટ કરવા તૈયાર વિગતો",
+  copyFieldBtn: "કૉપિ",
+  copiedFieldBtn: "કૉપિ થયું",
+  buttonGuideTitle: "અંગ્રેજી પોર્ટલ બટનોનો ગુજરાતી અર્થ",
+  chatYouLabel: "તમે",
 };
 
 const PA: SubmissionUiStrings = {
@@ -677,6 +823,15 @@ const PA: SubmissionUiStrings = {
   errInvalidPhone: "ਅੱਗੇ ਵਧਣ ਤੋਂ ਪਹਿਲਾਂ ਕਿਰਪਾ ਕਰਕੇ ਸਹੀ 10 ਅੰਕਾਂ ਦਾ ਫ਼ੋਨ ਨੰਬਰ ਲਿਖੋ।",
   privacyRequiredLocalDesc:
     "ਤੁਹਾਡਾ ਨਾਮ ਅਤੇ ਫ਼ੋਨ ਨੰਬਰ ਤੁਹਾਡੇ ਬ੍ਰਾਊਜ਼ਰ ਵਿੱਚ ਹੀ ਪੱਤਰ ਵਿੱਚ ਜੋੜੇ ਜਾਂਦੇ ਹਨ ਅਤੇ ਕਦੇ AI ਨੂੰ ਨਹੀਂ ਭੇਜੇ ਜਾਂਦੇ।",
+  step1Part1Title: "ਆਪਣੀ ਸਮੱਸਿਆ ਬੋਲ ਕੇ ਜਾਂ ਟਾਈਪ ਕਰਕੇ ਦੱਸੋ",
+  pincodeLabel: "ਪਿੰਨਕੋਡ / Pincode (ਵਿਕਲਪਿਕ)",
+  referenceNumberLabel: "ਬਿੱਲ / ਖਪਤਕਾਰ / PNR / ਅਰਜ਼ੀ ਨੰਬਰ (ਜੇ ਹੋਵੇ)",
+  portalLanguageNoticeTitle: "ਪੋਰਟਲ ਭਾਸ਼ਾ ਜਾਣਕਾਰੀ",
+  portalFormSheetTitle: "ਪੋਰਟਲ ਵਿੱਚ ਪੇਸਟ ਕਰਨ ਲਈ ਤਿਆਰ ਵੇਰਵੇ",
+  copyFieldBtn: "ਕਾਪੀ",
+  copiedFieldBtn: "ਕਾਪੀ ਹੋਇਆ",
+  buttonGuideTitle: "ਅੰਗਰੇਜ਼ੀ ਪੋਰਟਲ ਬਟਨਾਂ ਦਾ ਪੰਜਾਬੀ ਅਰਥ",
+  chatYouLabel: "ਤੁਸੀਂ",
 };
 
 const OR: SubmissionUiStrings = {
@@ -801,6 +956,15 @@ const UR: SubmissionUiStrings = {
   errInvalidPhone: "آگے بڑھنے سے پہلے براہ کرم درست 10 ہندسوں کا فون نمبر درج کریں۔",
   privacyRequiredLocalDesc:
     "آپ کا نام اور فون نمبر صرف آپ کے براؤزر میں خط میں شامل ہوتے ہیں اور کبھی AI کو نہیں بھیجے جاتے۔",
+  step1Part1Title: "اپنا مسئلہ بول کر یا ٹائپ کرکے بتائیں",
+  pincodeLabel: "پن کوڈ / Pincode (اختیاری)",
+  referenceNumberLabel: "بل / کنزیومر / PNR / درخواست نمبر (اگر ہو)",
+  portalLanguageNoticeTitle: "پورٹل کی زبان کی معلومات",
+  portalFormSheetTitle: "پورٹل فارم میں پیسٹ کرنے کے لیے تیار تفصیلات",
+  copyFieldBtn: "کاپی",
+  copiedFieldBtn: "کاپی ہو گیا",
+  buttonGuideTitle: "انگریزی پورٹل بٹنوں کا اردو مطلب",
+  chatYouLabel: "آپ",
 };
 
 const SUBMISSION_TRANSLATIONS: Record<string, SubmissionUiStrings> = {

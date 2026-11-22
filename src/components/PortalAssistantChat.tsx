@@ -34,6 +34,7 @@ interface PortalAssistantChatProps {
   errorMessage: string | null;
   onSendMessage: (text: string) => void;
   onClearChat: () => void;
+  voiceUnsupportedText?: string;
 }
 
 export function PortalAssistantChat({
@@ -48,6 +49,7 @@ export function PortalAssistantChat({
   errorMessage,
   onSendMessage,
   onClearChat,
+  voiceUnsupportedText,
 }: PortalAssistantChatProps) {
   const [input, setInput] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -116,7 +118,7 @@ export function PortalAssistantChat({
 
     const SpeechCtor = getSpeechRecognitionConstructor();
     if (!SpeechCtor) {
-      setVoiceError("Voice input is not supported in this browser.");
+      setVoiceError(voiceUnsupportedText || "Voice input is not supported in this browser.");
       return;
     }
 
@@ -154,7 +156,7 @@ export function PortalAssistantChat({
       recognition.start();
     } catch {
       setIsListening(false);
-      setVoiceError("Could not start voice input. Please type your question.");
+      setVoiceError(voiceUnsupportedText || "Could not start voice input. Please type your question.");
     }
   };
 
@@ -330,7 +332,7 @@ export function PortalAssistantChat({
                       }`}
                     >
                       <span className="font-medium">
-                        {isModel ? "MakkalVoice" : "You"}
+                        {isModel ? "MakkalVoice" : st.chatYouLabel}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="font-mono tabular-nums">{msg.timestamp}</span>

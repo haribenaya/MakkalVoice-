@@ -11,6 +11,8 @@ import {
   SAMPLE_SCENARIOS,
 } from "./data/languages";
 import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
+import { getLocalizedDistrictName, getLocalizedStateName } from "./data/localizedLocations";
+import { localizePortalEntry, PORTAL_LANGUAGE_SUPPORT } from "./data/localizedPortals";
 import { getSubmissionStrings } from "./data/submissionTranslations";
 import { getUiStrings } from "./data/translations";
 import type {
@@ -40,6 +42,7 @@ import {
 } from "./utils/speech";
 
 const HERO_IMAGE_PATH = "/src/assets/images/hero_makkalvoice_1795284698438.jpg";
+const HERO_BANNER_PATH = "/src/assets/images/civic_voice_backdrop_1795320159387.jpg";
 
 const INITIAL_FORM: ComplaintFormState = {
   language: "Tamil",
@@ -49,6 +52,8 @@ const INITIAL_FORM: ComplaintFormState = {
   customDistrict: "",
   town: "",
   street: "",
+  pincode: "",
+  referenceNumber: "",
   name: "",
   contact: "",
   complaint: "",
@@ -96,6 +101,7 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ComplaintFieldErrors>({});
   const [heroImgError, setHeroImgError] = useState(false);
+  const [bannerImgError, setBannerImgError] = useState(false);
 
   // Voice input & speech output state
   const [voiceTarget, setVoiceTarget] = useState<"complaint" | "answer" | null>(null);
@@ -545,7 +551,11 @@ export default function App() {
   };
 
   const effectiveDistrict = resolveEffectiveDistrict(form);
-  const locationLabel = [form.town.trim(), effectiveDistrict, form.state]
+  const locationLabel = [
+    form.town.trim(),
+    effectiveDistrict ? getLocalizedDistrictName(effectiveDistrict, form.language) : "",
+    form.state ? getLocalizedStateName(form.state, form.language) : "",
+  ]
     .filter(Boolean)
     .join(", ");
 
@@ -559,6 +569,7 @@ export default function App() {
         draftData,
         t.emergency112Note,
         t.verificationDisclaimer,
+        form.language,
       ),
     [
       form.category,
@@ -568,6 +579,7 @@ export default function App() {
       draftData,
       t.emergency112Note,
       t.verificationDisclaimer,
+      form.language,
     ],
   );
 
@@ -652,9 +664,9 @@ export default function App() {
       dir={t.isRtl ? "rtl" : "ltr"}
       className="min-h-screen bg-slate-50 text-slate-900 flex flex-col"
     >
-      {/* Top Bar Contract: Single row, 3 zones separated by gap-8 */}
+      {/* Top Bar Contract: Single row, 3 zones aligned with workspace max-w-5xl */}
       <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
           {/* Zone 1: Single text element wordmark */}
           <a
             href="#top"
@@ -718,22 +730,40 @@ export default function App() {
       </header>
 
       <main id="top" className="flex-1">
-        {/* Hero Section: Voice-First, Clean on Both Phone & Laptop */}
-        <section className="bg-gradient-to-b from-blue-50/45 via-white to-white border-b border-slate-200/80">
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-7 pb-8 sm:py-12 lg:py-14">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-12 items-stretch">
-              <div className="lg:col-span-7 flex flex-col justify-center">
-                <p className="text-xs font-semibold text-blue-700">{t.heroKicker}</p>
+        {/* Hero Section: Civic Concept Background Banner + Measured Contrast Scrim */}
+        <section className="relative overflow-hidden bg-slate-50 border-b border-slate-200/80">
+          {/* Concept Background Banner */}
+          {!bannerImgError && (
+            <img
+              src={HERO_BANNER_PATH}
+              alt=""
+              aria-hidden="true"
+              referrerPolicy="no-referrer"
+              onError={() => setBannerImgError(true)}
+              className="pointer-events-none select-none absolute inset-0 w-full h-full object-cover object-center opacity-55 sm:opacity-65"
+            />
+          )}
 
-                <h1 className="mt-2 font-display text-[1.85rem] sm:text-4xl lg:text-[3.05rem] font-bold tracking-tight text-slate-950 [text-wrap:balance] leading-[1.12]">
+          {/* Measured Editorial Scrim for crisp WCAG AA readability on phone & laptop */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/92 lg:bg-gradient-to-r lg:from-white/95 lg:via-white/82 lg:to-white/45"
+          />
+
+          <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-10 items-center">
+              <div className="lg:col-span-7 flex flex-col justify-center">
+                <p className="text-xs font-semibold text-blue-800">{t.heroKicker}</p>
+
+                <h1 className="mt-2 font-display text-[1.8rem] sm:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-slate-950 [text-wrap:balance] leading-[1.14]">
                   {t.heroTitle}
                 </h1>
 
-                <p className="mt-3.5 text-base sm:text-lg text-slate-600 leading-relaxed max-w-xl">
+                <p className="mt-3 text-base text-slate-700 leading-relaxed max-w-xl">
                   {t.heroSubtitle}
                 </p>
 
-                <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-slate-500">
+                <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-slate-600">
                   <span>{t.heroMeta1}</span>
                   <span aria-hidden="true">·</span>
                   <span>{t.heroMeta2}</span>
@@ -745,7 +775,7 @@ export default function App() {
                   <button
                     type="button"
                     onClick={handleHeroStartSpeaking}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-xs transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-sm transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
                   >
                     <Mic className="w-5 h-5" aria-hidden="true" />
                     {t.heroCta}
@@ -753,7 +783,7 @@ export default function App() {
 
                   <a
                     href="#how-it-works"
-                    className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3 py-2.5 text-sm font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
+                    className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3.5 py-2.5 text-sm font-medium text-slate-800 hover:text-slate-950 bg-white/75 sm:bg-transparent rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                   >
                     {t.heroSecondary}
                     <ArrowDown className="w-4 h-4" aria-hidden="true" />
@@ -762,14 +792,14 @@ export default function App() {
               </div>
 
               <div className="lg:col-span-5 flex">
-                <div className="w-full rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.06)] flex items-center justify-center">
+                <div className="w-full rounded-2xl overflow-hidden border border-white/80 ring-1 ring-slate-200/80 bg-white/90 shadow-[0_4px_18px_rgba(15,23,42,0.06)] flex items-center justify-center">
                   {!heroImgError ? (
                     <img
                       src={HERO_IMAGE_PATH}
                       alt="Indian citizens speaking into a smartphone to draft a structured public grievance letter"
                       referrerPolicy="no-referrer"
                       onError={() => setHeroImgError(true)}
-                      className="w-full h-52 sm:h-68 lg:h-full object-cover"
+                      className="w-full h-52 sm:h-64 lg:h-72 object-cover"
                     />
                   ) : (
                     <div className="p-8 text-center">
@@ -780,37 +810,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-              </div>
-            </div>
-
-            {/* One-Tap Native Script Language Bar (Horizontal scroll rail on phone, wrapped bar on laptop) */}
-            <div className="mt-7 sm:mt-9 pt-5 border-t border-slate-200/80">
-              <p className="text-xs font-medium text-slate-500 mb-2.5">
-                {t.chooseLanguageLabel}
-              </p>
-              <div
-                role="group"
-                aria-label={t.chooseLanguageLabel}
-                className="flex items-center gap-2 overflow-x-auto no-scrollbar sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1"
-              >
-                {LANGUAGES.map((lang) => {
-                  const active = form.language === lang.name;
-                  return (
-                    <button
-                      key={lang.name}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => handleLanguageSelect(lang.name)}
-                      className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl border transition-all whitespace-nowrap shrink-0 min-h-[40px] ${
-                        active
-                          ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-950"
-                      }`}
-                    >
-                      {lang.nativeLabel}
-                    </button>
-                  );
-                })}
               </div>
             </div>
           </div>
@@ -935,6 +934,7 @@ export default function App() {
             <DraftReview
               t={t}
               st={st}
+              form={form}
               draftData={draftData}
               subject={editableSubject}
               draftText={editableDraft}
@@ -996,38 +996,60 @@ export default function App() {
             </p>
 
             <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {FEATURED_OFFICIAL_PORTALS.map((portal) => (
-                <div
-                  key={portal.url}
-                  className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
-                >
-                  <div>
-                    <p className="text-xs text-slate-500">{portal.authorityScope}</p>
-                    <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
-                      {portal.name}
-                    </h3>
-                    <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
-                      {portal.description}
-                    </p>
+              {FEATURED_OFFICIAL_PORTALS.map((rawPortal) => {
+                const portal = localizePortalEntry(rawPortal, form.language);
+                const langSupport = rawPortal.id
+                  ? PORTAL_LANGUAGE_SUPPORT[rawPortal.id]
+                  : undefined;
+                const langSupportLabel =
+                  langSupport?.supportedNoteKey === "tamilAndEnglish"
+                    ? st.portalLangTamilAndEnglish
+                    : langSupport?.supportedNoteKey === "hindiAndEnglish"
+                      ? st.portalLangHindiAndEnglish
+                      : langSupport?.supportedNoteKey === "multiIndian"
+                        ? st.portalLangMultiIndian
+                        : st.portalLangEnglishOnly;
+
+                return (
+                  <div
+                    key={portal.url}
+                    className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
+                  >
+                    <div>
+                      <p className="text-xs text-slate-500">{portal.authorityScope}</p>
+                      <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
+                        {portal.name}
+                      </h3>
+                      <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                        {portal.description}
+                      </p>
+                      <p className="mt-2.5 text-xs text-slate-500 flex items-start gap-1.5 leading-relaxed">
+                        <Globe
+                          className="w-3.5 h-3.5 text-blue-700 mt-0.5 shrink-0"
+                          aria-hidden="true"
+                        />
+                        <span>{langSupportLabel}</span>
+                      </p>
+                    </div>
+                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
+                      <span className="text-xs font-mono tabular-nums text-slate-500 truncate">
+                        {portal.helpline
+                          ? `${t.helplineLabel}: ${portal.helpline}`
+                          : portal.domain ?? portal.url.replace("https://", "")}
+                      </span>
+                      <a
+                        href={portal.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
+                      >
+                        {t.visitPortal}
+                        <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                      </a>
+                    </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
-                    <span className="text-xs font-mono tabular-nums text-slate-500 truncate">
-                      {portal.helpline
-                        ? `${t.helplineLabel}: ${portal.helpline}`
-                        : portal.domain ?? portal.url.replace("https://", "")}
-                    </span>
-                    <a
-                      href={portal.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
-                    >
-                      {t.visitPortal}
-                      <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                    </a>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
@@ -1101,6 +1123,7 @@ export default function App() {
           setPortalChatMessages([]);
           setPortalChatError(null);
         }}
+        voiceUnsupportedText={t.voiceUnsupported}
       />
     </div>
   );

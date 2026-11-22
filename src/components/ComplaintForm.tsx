@@ -1,5 +1,7 @@
 import {
   ArrowRight,
+  FileText,
+  Hash,
   Lock,
   MapPin,
   Mic,
@@ -12,6 +14,8 @@ import {
 } from "lucide-react";
 import { COMPLAINT_CATEGORIES, LANGUAGES, SAMPLE_SCENARIOS } from "../data/languages";
 import { INDIA_STATE_DISTRICTS, INDIAN_STATES_AND_UTS } from "../data/indiaLocations";
+import { getLocalizedDistrictName, getLocalizedStateName } from "../data/localizedLocations";
+import { getLocalizedSampleLabel } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
 import type { ComplaintCategory, ComplaintFormState } from "../types";
@@ -138,128 +142,144 @@ export function ComplaintForm({
           onSubmit();
         }}
       >
-        {/* PART 01: Voice-First Capture Stage */}
-        <div className="bg-blue-50/40 border border-blue-200/70 rounded-2xl p-4 sm:p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={onToggleVoice}
-              disabled={busy || !speechSupported}
-              aria-pressed={isListening}
-              className={`w-full sm:w-auto inline-flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 text-base font-semibold rounded-xl shadow-xs transition-all whitespace-nowrap min-h-[54px] active:scale-[0.99] ${
-                isListening
-                  ? "bg-red-600 text-white hover:bg-red-700"
-                  : "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-600"
-              }`}
-            >
-              {isListening ? (
-                <>
-                  <MicOff className="w-5 h-5 shrink-0" aria-hidden="true" />
-                  <span>{t.stopListening}</span>
-                </>
-              ) : (
-                <>
-                  <Mic className="w-5 h-5 shrink-0" aria-hidden="true" />
-                  <span>
-                    {t.tapToSpeak} ({activeLanguageObj?.nativeLabel ?? form.language})
-                  </span>
-                </>
-              )}
-            </button>
+        {/* PART 01: Voice-First Problem Description */}
+        <div className="space-y-4">
+          <div className="flex items-baseline gap-2.5">
+            <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
+              01
+            </span>
+            <h3 className="font-display text-base font-semibold text-slate-950">
+              {st.step1Part1Title}
+            </h3>
+          </div>
 
-            {form.complaint.trim().length >= 8 && (
+          <div className="bg-blue-50/35 border border-blue-200/70 rounded-2xl p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <button
                 type="button"
-                onClick={onAutoDetectFromVoice}
-                disabled={busy || extractingVoice}
-                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-slate-800 bg-white border border-slate-300/90 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap min-h-[44px] disabled:opacity-50"
+                onClick={onToggleVoice}
+                disabled={busy || !speechSupported}
+                aria-pressed={isListening}
+                className={`w-full sm:w-auto inline-flex items-center justify-center gap-3 px-6 sm:px-7 py-3.5 text-base font-semibold rounded-xl shadow-xs transition-all whitespace-nowrap min-h-[54px] active:scale-[0.99] ${
+                  isListening
+                    ? "bg-red-600 text-white hover:bg-red-700"
+                    : "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-600"
+                }`}
               >
-                <MapPin className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
-                {extractingVoice ? t.autoFilling : t.autoFillVoice}
+                {isListening ? (
+                  <>
+                    <MicOff className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    <span>{t.stopListening}</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-5 h-5 shrink-0" aria-hidden="true" />
+                    <span>
+                      {t.tapToSpeak} ({activeLanguageObj?.nativeLabel ?? form.language})
+                    </span>
+                  </>
+                )}
               </button>
+
+              {form.complaint.trim().length >= 8 && (
+                <button
+                  type="button"
+                  onClick={onAutoDetectFromVoice}
+                  disabled={busy || extractingVoice}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium text-slate-800 bg-white border border-slate-300/90 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap min-h-[44px] disabled:opacity-50"
+                >
+                  <MapPin className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                  {extractingVoice ? t.autoFilling : t.autoFillVoice}
+                </button>
+              )}
+            </div>
+
+            {!speechSupported && (
+              <p className="mt-3 text-xs text-amber-800">{t.voiceUnsupported}</p>
             )}
-          </div>
 
-          {!speechSupported && (
-            <p className="mt-3 text-xs text-amber-800">{t.voiceUnsupported}</p>
-          )}
-
-          {isListening && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="mt-4 px-4 py-3 text-sm bg-red-50 text-red-900 border border-red-200 rounded-xl"
-            >
-              <p className="font-medium">{t.listeningNow}</p>
-              {interimTranscript && (
-                <p className="mt-1 text-red-700 italic">“{interimTranscript}”</p>
-              )}
-            </div>
-          )}
-
-          {autoFillNotice && (
-            <div
-              role="status"
-              className="mt-3 px-4 py-2.5 text-xs font-medium text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl"
-            >
-              {autoFillNotice}
-            </div>
-          )}
-
-          {/* Complaint Textarea */}
-          <div className="mt-5">
-            <label
-              htmlFor="complaint-textarea"
-              className="block text-sm font-medium text-slate-900"
-            >
-              {t.complaintLabel}{" "}
-              <span className="text-red-600" aria-hidden="true">*</span>
-            </label>
-            <textarea
-              id="complaint-textarea"
-              rows={4}
-              required
-              aria-invalid={Boolean(fieldErrors?.complaint)}
-              value={form.complaint}
-              onChange={(e) => onChange("complaint", e.target.value)}
-              disabled={busy}
-              placeholder={t.complaintPlaceholder}
-              className={`mt-2 w-full p-4 text-base leading-relaxed text-slate-950 bg-white border rounded-xl focus:outline-none focus:ring-2 transition-colors resize-y ${
-                fieldErrors?.complaint
-                  ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
-                  : "border-slate-300/90 focus:border-blue-600 focus:ring-blue-600/15"
-              }`}
-            />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-              <span>{t.reviewVoiceHint}</span>
-              <span className="font-mono tabular-nums">{form.complaint.length} / 2500</span>
-            </div>
-          </div>
-
-          {/* Quick Examples */}
-          <div className="mt-4 pt-3.5 border-t border-blue-200/50 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
-            <span className="font-medium text-slate-500">{t.tryExample}</span>
-            {SAMPLE_SCENARIOS.map((sample, idx) => (
-              <button
-                key={sample.label}
-                type="button"
-                disabled={busy}
-                onClick={() => onApplySample(idx)}
-                className="text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+            {isListening && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mt-4 px-4 py-3 text-sm bg-red-50 text-red-900 border border-red-200 rounded-xl"
               >
-                {sample.label}
-              </button>
-            ))}
+                <p className="font-medium">{t.listeningNow}</p>
+                {interimTranscript && (
+                  <p className="mt-1 text-red-700 italic">“{interimTranscript}”</p>
+                )}
+              </div>
+            )}
+
+            {autoFillNotice && (
+              <div
+                role="status"
+                className="mt-3 px-4 py-2.5 text-xs font-medium text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl"
+              >
+                {autoFillNotice}
+              </div>
+            )}
+
+            {/* Complaint Textarea */}
+            <div className="mt-5">
+              <label
+                htmlFor="complaint-textarea"
+                className="block text-sm font-medium text-slate-900"
+              >
+                {t.complaintLabel}{" "}
+                <span className="text-red-600" aria-hidden="true">*</span>
+              </label>
+              <textarea
+                id="complaint-textarea"
+                rows={4}
+                required
+                aria-invalid={Boolean(fieldErrors?.complaint)}
+                value={form.complaint}
+                onChange={(e) => onChange("complaint", e.target.value)}
+                disabled={busy}
+                placeholder={t.complaintPlaceholder}
+                className={`mt-2 w-full p-4 text-base leading-relaxed text-slate-950 bg-white border rounded-xl focus:outline-none focus:ring-2 transition-colors resize-y ${
+                  fieldErrors?.complaint
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
+                    : "border-slate-300/90 focus:border-blue-600 focus:ring-blue-600/15"
+                }`}
+              />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span>{t.reviewVoiceHint}</span>
+                <span className="font-mono tabular-nums">{form.complaint.length} / 2500</span>
+              </div>
+            </div>
+
+            {/* Localized Quick Examples */}
+            <div className="mt-4 pt-3.5 border-t border-blue-200/50 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+              <span className="font-medium text-slate-500">{t.tryExample}</span>
+              {SAMPLE_SCENARIOS.map((sample, idx) => (
+                <button
+                  key={sample.label}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onApplySample(idx)}
+                  className="text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  {getLocalizedSampleLabel(idx, form.language, sample.label)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* PART 02: Location & Category */}
-        <div className="space-y-4">
+        {/* PART 02: Category & Exact Location (100% Localized Dropdowns) */}
+        <div className="pt-6 border-t border-slate-200/80 space-y-4">
           <div>
-            <h3 className="font-display text-base font-semibold text-slate-950">
-              {t.locationSectionTitle}
-            </h3>
-            <p className="mt-0.5 text-xs sm:text-sm text-slate-500">
+            <div className="flex items-baseline gap-2.5">
+              <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
+                02
+              </span>
+              <h3 className="font-display text-base font-semibold text-slate-950">
+                {t.locationSectionTitle}
+              </h3>
+            </div>
+            <p className="mt-1 text-xs sm:text-sm text-slate-500">
               {t.locationSectionHint}
             </p>
           </div>
@@ -304,7 +324,7 @@ export function ComplaintForm({
                 <option value="">{t.selectState}</option>
                 {INDIAN_STATES_AND_UTS.map((stateName) => (
                   <option key={stateName} value={stateName}>
-                    {stateName}
+                    {getLocalizedStateName(stateName, form.language)}
                   </option>
                 ))}
               </select>
@@ -329,7 +349,7 @@ export function ComplaintForm({
                     <option value="">{t.selectDistrict}</option>
                     {districtsForState.map((d) => (
                       <option key={d} value={d}>
-                        {d}
+                        {getLocalizedDistrictName(d, form.language)}
                       </option>
                     ))}
                     <option value="__other__">{t.otherDistrictOption}</option>
@@ -359,7 +379,7 @@ export function ComplaintForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label
                 htmlFor="town-input"
@@ -395,23 +415,54 @@ export function ComplaintForm({
                 className="mt-1.5 w-full h-12 px-3.5 text-base sm:text-sm text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
               />
             </div>
+
+            <div>
+              <label
+                htmlFor="pincode-input"
+                className="block text-sm font-medium text-slate-800"
+              >
+                {st.pincodeLabel}
+              </label>
+              <div className="relative mt-1.5">
+                <Hash
+                  className="w-4 h-4 text-slate-400 pointer-events-none absolute top-1/2 -translate-y-1/2 start-3.5"
+                  aria-hidden="true"
+                />
+                <input
+                  id="pincode-input"
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={form.pincode}
+                  onChange={(e) => onChange("pincode", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  disabled={busy}
+                  placeholder={st.pincodePlaceholder}
+                  className="w-full h-12 ps-10 pe-3.5 text-base sm:text-sm font-mono tabular-nums text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* PART 03: Required Citizen Contact Details (Non-Optional) */}
+        {/* PART 03: Citizen & Portal Reference Details */}
         <div className="pt-6 border-t border-slate-200/80 space-y-4">
           <div>
-            <h3 className="font-display text-base font-semibold text-slate-950">
-              {st.citizenDetailsTitle}{" "}
-              <span className="text-red-600" aria-hidden="true">*</span>
-            </h3>
+            <div className="flex items-baseline gap-2.5">
+              <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
+                03
+              </span>
+              <h3 className="font-display text-base font-semibold text-slate-950">
+                {st.citizenDetailsTitle}{" "}
+                <span className="text-red-600" aria-hidden="true">*</span>
+              </h3>
+            </div>
             <p className="mt-1 text-xs text-slate-500 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
               <span>{st.citizenDetailsNote}</span>
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label
                 htmlFor="name-input"
@@ -473,6 +524,30 @@ export function ComplaintForm({
                       ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
                       : "border-slate-300/90 focus:border-blue-600 focus:ring-blue-600/15"
                   }`}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label
+                htmlFor="reference-input"
+                className="block text-sm font-medium text-slate-800"
+              >
+                {st.referenceNumberLabel}
+              </label>
+              <div className="relative mt-1.5">
+                <FileText
+                  className="w-4 h-4 text-slate-400 pointer-events-none absolute top-1/2 -translate-y-1/2 start-3.5"
+                  aria-hidden="true"
+                />
+                <input
+                  id="reference-input"
+                  type="text"
+                  value={form.referenceNumber}
+                  onChange={(e) => onChange("referenceNumber", e.target.value)}
+                  disabled={busy}
+                  placeholder={st.referenceNumberPlaceholder}
+                  className="w-full h-12 ps-10 pe-3.5 text-base sm:text-sm font-mono text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
                 />
               </div>
             </div>

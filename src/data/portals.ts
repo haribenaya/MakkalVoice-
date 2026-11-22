@@ -6,6 +6,7 @@ import type {
   PortalGuidance,
 } from "../types";
 import { selectFallbackPortalIds, VERIFIED_PORTALS } from "./verifiedPortals";
+import { getLocalizedFallbackDocs, localizePortalEntry } from "./localizedPortals";
 
 export function buildFallbackDocuments(
   category: ComplaintCategory,
@@ -174,6 +175,37 @@ export function buildFallbackDocuments(
   ];
 }
 
+function buildFallbackButtonGuide(uiLanguage: string) {
+  if (uiLanguage === "Tamil") {
+    return [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "புதிய புகாரைப் பதிவு செய்யவும்" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "உங்கள் மொபைல் எண்ணுக்கு வரும் OTP-ஐ உள்ளிடவும்" },
+      { englishLabel: "Select Department / Category", localMeaning: "சம்பந்தப்பட்ட அரசு துறையைத் தேர்ந்தெடுக்கவும்" },
+      { englishLabel: "Grievance Description", localMeaning: "இங்கே நகலெடுத்த புகார் கடிதத்தை ஒட்டவும் (Paste)" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "புகைப்படம் அல்லது பில் கோப்பை இணைக்கவும்" },
+      { englishLabel: "Submit", localMeaning: "புகாரை இறுதியாகச் சமர்ப்பிக்கவும்" },
+    ];
+  }
+  if (uiLanguage === "Hindi") {
+    return [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "नई शिकायत दर्ज करें" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "अपने मोबाइल पर आया OTP दर्ज करें" },
+      { englishLabel: "Select Department / Category", localMeaning: "संबंधित सरकारी विभाग चुनें" },
+      { englishLabel: "Grievance Description", localMeaning: "यहाँ कॉपी किया गया शिकायत पत्र पेस्ट करें" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "फ़ोटो या बिल अपलोड करें" },
+      { englishLabel: "Submit", localMeaning: "शिकायत अंतिम रूप से जमा करें" },
+    ];
+  }
+  return [
+    { englishLabel: "Register / Lodge Grievance", localMeaning: "Start filing a new complaint on the portal" },
+    { englishLabel: "Mobile OTP Verification", localMeaning: "Enter the one-time code sent to your mobile number" },
+    { englishLabel: "Select Department / Category", localMeaning: "Pick the matching government department" },
+    { englishLabel: "Grievance Description", localMeaning: "Paste your prepared formal complaint letter here" },
+    { englishLabel: "Upload Attachment / Document", localMeaning: "Attach supporting photos, bills, or PDF proof" },
+    { englishLabel: "Submit", localMeaning: "Send your complaint and receive your tracking ID" },
+  ];
+}
+
 export function resolvePortalGuidance(
   category: ComplaintCategory,
   state: string,
@@ -182,6 +214,7 @@ export function resolvePortalGuidance(
   draftData: DraftResponse | null,
   emergencyNoteText: string,
   verificationNoteText: string,
+  uiLanguage = "English",
 ): PortalGuidance {
   const fallback = selectFallbackPortalIds(category, state, district, complaintText);
 
@@ -199,20 +232,31 @@ export function resolvePortalGuidance(
         ? fallback.secondaryId
         : undefined;
 
-  const primary = VERIFIED_PORTALS[primaryId] ?? VERIFIED_PORTALS.cpgrams;
-  const secondary = secondaryCandidate ? VERIFIED_PORTALS[secondaryCandidate] : undefined;
+  const rawPrimary = VERIFIED_PORTALS[primaryId] ?? VERIFIED_PORTALS.cpgrams;
+  const rawSecondary = secondaryCandidate ? VERIFIED_PORTALS[secondaryCandidate] : undefined;
+
+  const primary = localizePortalEntry(rawPrimary, uiLanguage);
+  const secondary = rawSecondary ? localizePortalEntry(rawSecondary, uiLanguage) : undefined;
 
   const requiredDocuments =
     draftData?.requiredDocuments && draftData.requiredDocuments.length > 0
       ? draftData.requiredDocuments
-      : buildFallbackDocuments(category, primaryId);
+      : getLocalizedFallbackDocs(category, uiLanguage) ??
+        buildFallbackDocuments(category, primaryId);
+
+  const englishButtonGuide =
+    draftData?.englishButtonGuide && draftData.englishButtonGuide.length > 0
+      ? draftData.englishButtonGuide
+      : buildFallbackButtonGuide(uiLanguage);
 
   return {
     primary,
     secondary,
     whyThisPortal: draftData?.whyThisPortal,
+    portalLanguageTip: draftData?.portalLanguageTip,
     filingSteps: draftData?.filingSteps,
     requiredDocuments,
+    englishButtonGuide,
     emergencyNote: category === "Public Safety" ? emergencyNoteText : undefined,
     verificationNote: verificationNoteText,
   };

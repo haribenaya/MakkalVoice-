@@ -38,6 +38,7 @@ interface SubmissionGuideModalProps {
   onDownloadDraft: () => void;
   onPortalOpened: () => void;
   onOpenAssistant: (presetQuestion?: string) => void;
+  portalLanguageNotice?: string;
 }
 
 function isSafeHttpsUrl(url: string): boolean {
@@ -67,6 +68,7 @@ export function SubmissionGuideModal({
   onDownloadDraft,
   onPortalOpened,
   onOpenAssistant,
+  portalLanguageNotice,
 }: SubmissionGuideModalProps) {
   const [activeStep, setActiveStep] = useState<number>(1);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -396,6 +398,15 @@ export function SubmissionGuideModal({
                   )}
                 </div>
 
+                {portalLanguageNotice && (
+                  <p className="mt-3 pt-3 border-t border-slate-200/80 text-xs text-slate-700 leading-relaxed">
+                    <strong className="font-semibold text-slate-900">
+                      {st.portalLanguageNoticeTitle}:
+                    </strong>{" "}
+                    {portalLanguageNotice}
+                  </p>
+                )}
+
                 {isSafeHttpsUrl(portalGuidance.primary.url) && (
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     <a
@@ -414,6 +425,30 @@ export function SubmissionGuideModal({
                   </div>
                 )}
               </div>
+
+              {portalGuidance.englishButtonGuide && portalGuidance.englishButtonGuide.length > 0 && (
+                <div className="p-4 rounded-lg border border-blue-200/80 bg-blue-50/40">
+                  <h4 className="text-xs font-semibold text-slate-900">
+                    {st.buttonGuideTitle}
+                  </h4>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    {st.buttonGuideSubtitle}
+                  </p>
+                  <ul className="mt-3 space-y-2 text-xs sm:text-sm">
+                    {portalGuidance.englishButtonGuide.map((item, idx) => (
+                      <li
+                        key={idx}
+                        className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1 pb-2 border-b border-blue-100 last:border-b-0 last:pb-0"
+                      >
+                        <span className="font-mono text-xs font-semibold text-slate-900">
+                          {item.englishLabel}
+                        </span>
+                        <span className="text-slate-700">{item.localMeaning}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {portalGuidance.filingSteps && portalGuidance.filingSteps.length > 0 && (
                 <div>

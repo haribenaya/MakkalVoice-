@@ -34,6 +34,8 @@ export interface ComplaintFormState {
   customDistrict: string;
   town: string;
   street: string;
+  pincode: string;
+  referenceNumber: string;
   name: string;
   contact: string;
   complaint: string;
@@ -56,6 +58,11 @@ export interface DocumentChecklistItem {
   mandatory: boolean;
 }
 
+export interface PortalButtonGuideItem {
+  englishLabel: string;
+  localMeaning: string;
+}
+
 export interface DraftResponse {
   subject: string;
   draft: string;
@@ -65,8 +72,10 @@ export interface DraftResponse {
   primaryPortalId: string;
   secondaryPortalId?: string;
   whyThisPortal: string;
+  portalLanguageTip?: string;
   filingSteps: string[];
   requiredDocuments: DocumentChecklistItem[];
+  englishButtonGuide?: PortalButtonGuideItem[];
 }
 
 export interface VoiceExtractionResponse {
@@ -81,8 +90,10 @@ export interface PortalGuidance {
   primary: PortalEntry;
   secondary?: PortalEntry;
   whyThisPortal?: string;
+  portalLanguageTip?: string;
   filingSteps?: string[];
   requiredDocuments: DocumentChecklistItem[];
+  englishButtonGuide: PortalButtonGuideItem[];
   emergencyNote?: string;
   verificationNote: string;
 }

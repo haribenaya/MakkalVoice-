@@ -6,6 +6,7 @@ import {
   BookmarkPlus,
   Check,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Copy,
   Download,
@@ -831,182 +832,17 @@ export function DraftReview({
           </div>
         </div>
 
-        {/* Supporting Documents Checklist */}
-        <div className="mt-6 pb-6 border-b border-slate-200">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <div>
-              <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-blue-700">01</span>
-                <FileCheck2 className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
-                {st.documentsTitle}
-              </h3>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
-                {st.documentsSubtitle}
-              </p>
-            </div>
-            <span className="font-mono text-xs font-medium tabular-nums text-slate-700">
-              {preparedDocCount} / {docs.length} {st.docsReadyLabel}
-            </span>
-          </div>
-
-          <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3.5">
-            {docs.map((doc) => {
-              const isChecked = Boolean(checkedDocs[doc.id]);
-              return (
-                <li
-                  key={doc.id}
-                  className="p-4 rounded-lg border border-slate-200 bg-slate-50/50"
-                >
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isChecked}
-                      onChange={() => toggleDoc(doc.id)}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 shrink-0 cursor-pointer"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                        <span
-                          className={`text-sm font-medium ${
-                            isChecked ? "line-through text-slate-400" : "text-slate-900"
-                          }`}
-                        >
-                          {doc.title}
-                        </span>
-                        <span aria-hidden="true" className="text-xs text-slate-300">
-                          ·
-                        </span>
-                        <span
-                          className={`text-xs font-medium ${
-                            doc.mandatory ? "text-blue-700" : "text-slate-500"
-                          }`}
-                        >
-                          {doc.mandatory ? st.docRequiredTag : st.docOptionalTag}
-                        </span>
-                      </div>
-                      {doc.detail && (
-                        <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                          {doc.detail}
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                </li>
-              );
-            })}
-          </ul>
-
-          <p className="mt-3 text-xs text-slate-500 leading-relaxed">
-            {st.docFormatNote}
-          </p>
-        </div>
-
-        {/* Innovation 3: Portal-Ready Proof Photo Compressor & PDF Bundler */}
-        <EvidenceToolsPanel
-          it={it}
-          attachments={attachments}
-          onAttachmentsChange={onAttachmentsChange}
-          subject={subject}
-          draftText={draftText}
-          portalName={portalGuidance.primary.name}
-          referenceNumber={form.referenceNumber.trim() || undefined}
-        />
-
-        {/* Ready-to-Paste Bilingual Portal Form Sheet + English Button Guide */}
-        <div className="mt-6 pb-6 border-b border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 1-Tap Copy Form Fields for English Government Portals */}
-          <div className="lg:col-span-7">
-            <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
-              <span className="font-mono text-xs font-semibold text-blue-700">03</span>
-              {st.portalFormSheetTitle}
-            </h3>
-            <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
-              {st.portalFormSheetSubtitle}
-            </p>
-
-            <div className="mt-3.5 border border-slate-200 rounded-xl divide-y divide-slate-200/80 overflow-hidden bg-slate-50/40">
-              {portalCopyRows.map((row) => {
-                const isRowCopied = copiedFieldKey === row.key;
-                return (
-                  <div
-                    key={row.key}
-                    className="px-3.5 py-3 flex items-center justify-between gap-3 bg-white"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs text-slate-500">
-                        <span className="font-medium text-slate-700">{row.localLabel}</span>
-                        <span className="mx-1.5 text-slate-300" aria-hidden="true">→</span>
-                        <span className="font-mono text-[11px] text-blue-700">{row.englishBox}</span>
-                      </p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-950 break-words">
-                        {row.value}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void handleCopyField(row.key, row.value)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 min-h-[36px]"
-                    >
-                      {isRowCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
-                          <span className="text-emerald-800">{st.copiedFieldBtn}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                          <span>{st.copyFieldBtn}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Bilingual English Portal Button Guide */}
-          <div className="lg:col-span-5 flex flex-col justify-between gap-4">
-            <div className="p-4 sm:p-5 rounded-xl border border-blue-200/70 bg-blue-50/35">
-              <h3 className="text-sm font-semibold text-slate-950">
-                {st.buttonGuideTitle}
-              </h3>
-              <p className="mt-1 text-xs text-slate-600 leading-relaxed">
-                {st.buttonGuideSubtitle}
-              </p>
-
-              <ul className="mt-3.5 space-y-2.5 text-xs sm:text-sm">
-                {portalGuidance.englishButtonGuide.map((item, idx) => (
-                  <li
-                    key={idx}
-                    className="pb-2.5 border-b border-blue-200/50 last:border-b-0 last:pb-0"
-                  >
-                    <p className="font-mono text-xs font-semibold text-slate-950">
-                      {item.englishLabel}
-                    </p>
-                    <p className="mt-0.5 text-slate-700 leading-relaxed">
-                      {item.localMeaning}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
-              {st.otpSubmissionNote}
-            </p>
-          </div>
-        </div>
-
-        {/* Tailored Step-by-Step Portal Filing Guide + Originality Checklist */}
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Step-by-Step Filing Guide + Checklist (Always visible & easy to follow) */}
+        <div className="mt-6 pb-6 border-b border-slate-200 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {portalGuidance.filingSteps && portalGuidance.filingSteps.length > 0 && (
             <div>
               <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-blue-700">04</span>
+                <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-700 text-white font-mono text-xs font-semibold shrink-0">
+                  1
+                </span>
                 {t.portalStepsTitle}
               </h3>
-              <ol className="mt-3 space-y-2.5 text-sm text-slate-700">
+              <ol className="mt-3.5 space-y-2.5 text-sm text-slate-700">
                 {portalGuidance.filingSteps.map((stepText, idx) => (
                   <li key={idx} className="flex items-start gap-2.5">
                     <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 mt-0.5 shrink-0">
@@ -1020,11 +856,11 @@ export function DraftReview({
           )}
 
           <div>
-            <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-1.5">
+            <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
               {t.submissionChecklistTitle}
             </h3>
-            <ul className="mt-3 space-y-2.5">
+            <ul className="mt-3.5 space-y-2.5">
               {[
                 { id: 1, label: t.checkStep1 },
                 { id: 2, label: t.checkStep2 },
@@ -1048,6 +884,190 @@ export function DraftReview({
             </ul>
           </div>
         </div>
+
+        {/* Clean Expandable Helper 1: Supporting Documents & Photo/PDF Compressor */}
+        <details className="mt-5 border border-slate-200/90 rounded-xl bg-slate-50/40 group">
+          <summary className="list-none cursor-pointer px-4 sm:px-5 py-4 flex items-center justify-between gap-3 select-none">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <FileCheck2 className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+              <span className="text-sm font-semibold text-slate-950 truncate">
+                {st.documentsTitle}
+              </span>
+              <span className="font-mono text-xs text-slate-500 tabular-nums shrink-0">
+                ({preparedDocCount}/{docs.length})
+              </span>
+            </div>
+            <ChevronDown
+              className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180 shrink-0"
+              aria-hidden="true"
+            />
+          </summary>
+
+          <div className="px-4 sm:px-5 pb-5 pt-2 border-t border-slate-200/70 bg-white rounded-b-xl">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              {st.documentsSubtitle}
+            </p>
+
+            <ul className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {docs.map((doc) => {
+                const isChecked = Boolean(checkedDocs[doc.id]);
+                return (
+                  <li
+                    key={doc.id}
+                    className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/50"
+                  >
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => toggleDoc(doc.id)}
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-700 focus:ring-emerald-600 shrink-0 cursor-pointer"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span
+                            className={`text-sm font-medium ${
+                              isChecked ? "line-through text-slate-400" : "text-slate-900"
+                            }`}
+                          >
+                            {doc.title}
+                          </span>
+                          <span aria-hidden="true" className="text-xs text-slate-300">
+                            ·
+                          </span>
+                          <span
+                            className={`text-xs font-medium ${
+                              doc.mandatory ? "text-blue-700" : "text-slate-500"
+                            }`}
+                          >
+                            {doc.mandatory ? st.docRequiredTag : st.docOptionalTag}
+                          </span>
+                        </div>
+                        {doc.detail && (
+                          <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                            {doc.detail}
+                          </p>
+                        )}
+                      </div>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+              {st.docFormatNote}
+            </p>
+
+            {/* Proof Photo Compressor & PDF Bundler */}
+            <EvidenceToolsPanel
+              it={it}
+              attachments={attachments}
+              onAttachmentsChange={onAttachmentsChange}
+              subject={subject}
+              draftText={draftText}
+              portalName={portalGuidance.primary.name}
+              referenceNumber={form.referenceNumber.trim() || undefined}
+            />
+          </div>
+        </details>
+
+        {/* Clean Expandable Helper 2: 1-Tap Copy Portal Fields & English Button Meanings */}
+        <details className="mt-3 border border-slate-200/90 rounded-xl bg-slate-50/40 group">
+          <summary className="list-none cursor-pointer px-4 sm:px-5 py-4 flex items-center justify-between gap-3 select-none">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Copy className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+              <span className="text-sm font-semibold text-slate-950 truncate">
+                {st.portalFormSheetTitle} · {st.buttonGuideTitle}
+              </span>
+            </div>
+            <ChevronDown
+              className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180 shrink-0"
+              aria-hidden="true"
+            />
+          </summary>
+
+          <div className="px-4 sm:px-5 pb-5 pt-4 border-t border-slate-200/70 bg-white rounded-b-xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* 1-Tap Copy Form Fields for English Government Portals */}
+            <div className="lg:col-span-7">
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                {st.portalFormSheetSubtitle}
+              </p>
+
+              <div className="mt-3 border border-slate-200 rounded-xl divide-y divide-slate-200/80 overflow-hidden bg-slate-50/40">
+                {portalCopyRows.map((row) => {
+                  const isRowCopied = copiedFieldKey === row.key;
+                  return (
+                    <div
+                      key={row.key}
+                      className="px-3.5 py-3 flex items-center justify-between gap-3 bg-white"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-slate-500">
+                          <span className="font-medium text-slate-700">{row.localLabel}</span>
+                          <span className="mx-1.5 text-slate-300" aria-hidden="true">→</span>
+                          <span className="font-mono text-[11px] text-blue-700">{row.englishBox}</span>
+                        </p>
+                        <p className="mt-0.5 text-sm font-medium text-slate-950 break-words">
+                          {row.value}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyField(row.key, row.value)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors whitespace-nowrap shrink-0 min-h-[36px]"
+                      >
+                        {isRowCopied ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-700" aria-hidden="true" />
+                            <span className="text-emerald-800">{st.copiedFieldBtn}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                            <span>{st.copyFieldBtn}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bilingual English Portal Button Guide */}
+            <div className="lg:col-span-5 flex flex-col justify-between gap-4">
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60">
+                <h4 className="text-sm font-semibold text-slate-950">
+                  {st.buttonGuideTitle}
+                </h4>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                  {st.buttonGuideSubtitle}
+                </p>
+
+                <ul className="mt-3 space-y-2.5 text-xs sm:text-sm">
+                  {portalGuidance.englishButtonGuide.map((item, idx) => (
+                    <li
+                      key={idx}
+                      className="pb-2 border-b border-slate-200/70 last:border-b-0 last:pb-0"
+                    >
+                      <p className="font-mono text-xs font-semibold text-slate-950">
+                        {item.englishLabel}
+                      </p>
+                      <p className="mt-0.5 text-slate-700 leading-relaxed">
+                        {item.localMeaning}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 border border-slate-200/80 rounded-xl p-3.5">
+                {st.otpSubmissionNote}
+              </p>
+            </div>
+          </div>
+        </details>
       </section>
 
       {/* Interactive Step-by-Step Submission Guide Modal */}

@@ -38,12 +38,12 @@ export function ComplaintTrackerSection({
   return (
     <section
       id="complaint-tracker"
-      className="no-print border-t border-slate-200 bg-slate-50 py-12"
+      className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
     >
-      <div className="max-w-5xl mx-auto px-4 sm:px-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+      <div>
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 pb-5 border-b border-slate-200/80">
           <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950 flex items-center gap-2">
+            <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950 flex items-center gap-2.5">
               <BookmarkCheck className="w-5 h-5 text-blue-700 shrink-0" aria-hidden="true" />
               {it.trackerTitle}
             </h2>

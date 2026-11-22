@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
+  BookmarkCheck,
   Check,
   ExternalLink,
+  FileEdit,
   Globe,
+  Landmark,
   Mic,
   Shield,
   X,
@@ -13,7 +16,6 @@ import { ClarifyChat } from "./components/ClarifyChat";
 import { ComplaintForm, type ComplaintFieldErrors } from "./components/ComplaintForm";
 import { ComplaintTrackerSection } from "./components/ComplaintTrackerSection";
 import { DraftReview } from "./components/DraftReview";
-import { HandsFreeVoiceModal } from "./components/HandsFreeVoiceModal";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
 import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
 import { INDIA_STATE_DISTRICTS } from "./data/indiaLocations";
@@ -136,8 +138,8 @@ export default function App() {
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [escalatingId, setEscalatingId] = useState<string | null>(null);
 
-  // Innovation 7: Hands-Free Voice Mode modal
-  const [handsFreeOpen, setHandsFreeOpen] = useState(false);
+  // Beginner-friendly primary dashboard view switcher
+  const [dashboardTab, setDashboardTab] = useState<"write" | "saved" | "portals">("write");
 
   // Google Maps Demo Key Quota Banner (Case A mandatory handler)
   const [mapsQuotaExceeded, setMapsQuotaExceeded] = useState(false);
@@ -370,56 +372,11 @@ export default function App() {
     }
   };
 
-  // Innovation 7: 4-Step Hands-Free Voice Assistant completion (Problem + Location + Name + Phone)
-  const handleHandsFreeComplete = (
-    spokenComplaint: string,
-    spokenLocation: string,
-    spokenName: string,
-    spokenPhone: string,
-  ) => {
-    const combinedForExtract = [spokenComplaint, spokenLocation].filter(Boolean).join(". ");
-    setForm((prev) => ({
-      ...prev,
-      complaint: spokenComplaint || prev.complaint,
-      street: spokenLocation && !prev.street.trim() ? spokenLocation : prev.street,
-      name: spokenName || prev.name,
-      contact: spokenPhone || prev.contact,
-    }));
-    setFieldErrors({});
-    setStep("describe");
-    document.getElementById("complaint-form")?.scrollIntoView({ behavior: "smooth" });
-
-    // Silently auto-detect category, state, district & town from the hands-free transcript
-    if (combinedForExtract.trim().length >= 8) {
-      setExtractingVoice(true);
-      void requestVoiceExtraction(combinedForExtract, form.language)
-        .then((extracted) => {
-          setForm((prev) => {
-            const nextState = extracted.state || prev.state;
-            const { district, customDistrict } = applyDistrictToForm(
-              prev,
-              nextState,
-              extracted.district ?? "",
-            );
-            return {
-              ...prev,
-              category: extracted.category ?? prev.category,
-              state: nextState,
-              district,
-              customDistrict,
-              town: extracted.town || prev.town,
-              street: extracted.street || prev.street,
-            };
-          });
-          setAutoFillNotice(t.autoFilledSuccess);
-        })
-        .catch(() => {
-          // Non-blocking background enrichment
-        })
-        .finally(() => {
-          setExtractingVoice(false);
-        });
-    }
+  const navigateToDashboardTab = (tab: "write" | "saved" | "portals", scrollTargetId = "workspace") => {
+    setDashboardTab(tab);
+    requestAnimationFrame(() => {
+      document.getElementById(scrollTargetId)?.scrollIntoView({ behavior: "smooth" });
+    });
   };
 
   const handleApplySample = (sampleIndex: number) => {
@@ -832,8 +789,11 @@ export default function App() {
     setEditableDraft(record.draft);
     setDraftLanguage("English");
     setActiveSavedId(record.id);
+    setDashboardTab("write");
     setStep("review");
-    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    });
   };
 
   const handleGenerateEscalationFromTracker = async (record: SavedComplaintRecord) => {
@@ -853,8 +813,11 @@ export default function App() {
       setEditableDraft(escalation.draft);
       setDraftLanguage(escalation.draftLanguage);
       setActiveSavedId(null);
+      setDashboardTab("write");
       setStep("review");
-      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+      requestAnimationFrame(() => {
+        document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+      });
     } catch (err) {
       setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
@@ -925,11 +888,14 @@ export default function App() {
   };
 
   const handleHeroStartSpeaking = () => {
+    setDashboardTab("write");
     setStep("describe");
     if (speechSupported && voiceTarget !== "complaint") {
       startVoiceInput("complaint");
     }
-    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    requestAnimationFrame(() => {
+      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    });
   };
 
   return (
@@ -984,30 +950,45 @@ export default function App() {
             MakkalVoice
           </a>
 
-          {/* Zone 2: Clean 3-link primary navigation (uncluttered) */}
+          {/* Zone 2: Clean 3-link primary navigation synced to dashboard tabs */}
           <nav
             aria-label="Primary navigation"
-            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
+            className="hidden md:flex items-center gap-7 text-sm font-medium"
           >
-            <a
-              href="#workspace"
-              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("write")}
+              className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
+                dashboardTab === "write"
+                  ? "text-blue-700 font-semibold border-b-2 border-blue-700"
+                  : "text-slate-600 hover:text-slate-950"
+              }`}
             >
               {t.navDraft}
-            </a>
-            <a
-              href="#complaint-tracker"
-              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("saved")}
+              className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
+                dashboardTab === "saved"
+                  ? "text-blue-700 font-semibold border-b-2 border-blue-700"
+                  : "text-slate-600 hover:text-slate-950"
+              }`}
             >
               {it.navTracker}
               {savedRecords.length > 0 ? ` (${savedRecords.length})` : ""}
-            </a>
-            <a
-              href="#official-portals"
-              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("portals")}
+              className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
+                dashboardTab === "portals"
+                  ? "text-blue-700 font-semibold border-b-2 border-blue-700"
+                  : "text-slate-600 hover:text-slate-950"
+              }`}
             >
               {t.navPortals}
-            </a>
+            </button>
           </nav>
 
           {/* Zone 3: PWA Install Button (when installable) + Single compact language selector */}
@@ -1084,13 +1065,14 @@ export default function App() {
                     {t.heroCta}
                   </button>
 
-                  <a
-                    href="#how-it-works"
+                  <button
+                    type="button"
+                    onClick={() => navigateToDashboardTab("portals", "how-it-works")}
                     className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3.5 py-2.5 text-sm font-medium text-slate-800 hover:text-slate-950 bg-white/75 sm:bg-transparent rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                   >
                     {t.heroSecondary}
                     <ArrowDown className="w-4 h-4" aria-hidden="true" />
-                  </a>
+                  </button>
                 </div>
               </div>
 
@@ -1118,286 +1100,348 @@ export default function App() {
           </div>
         </section>
 
-        {/* Main Interactive Workflow Container */}
-        <section id="workspace" className="max-w-5xl mx-auto px-4 sm:px-6 py-7 sm:py-11">
-          {/* 3-Step Progress Strip */}
-          <nav
-            aria-label="Complaint drafting steps"
-            className="no-print mb-6 sm:mb-7 grid grid-cols-3 border border-slate-200/90 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-x divide-slate-200/80"
+        {/* Clean, Beginner-Friendly Dashboard Workspace */}
+        <section id="workspace" className="max-w-5xl mx-auto px-4 sm:px-6 py-7 sm:py-10">
+          {/* Clear 3-Section Dashboard Navigation (Works cleanly on Mobile + Desktop) */}
+          <div
+            role="tablist"
+            aria-label="Dashboard sections"
+            className="no-print mb-6 grid grid-cols-3 gap-2 p-1.5 bg-slate-200/70 rounded-2xl"
           >
-            {steps.map((s, idx) => {
-              const isCurrent = step === s.id;
-              const currentIdx = steps.findIndex((item) => item.id === step);
-              const isCompleted = idx < currentIdx && s.enabled;
+            <button
+              type="button"
+              role="tab"
+              aria-selected={dashboardTab === "write"}
+              onClick={() => setDashboardTab("write")}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-3 text-xs sm:text-sm font-semibold rounded-xl transition-all min-h-[48px] ${
+                dashboardTab === "write"
+                  ? "bg-white text-slate-950 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FileEdit className="w-4 h-4 text-blue-700 shrink-0 hidden sm:block" aria-hidden="true" />
+              <span className="truncate">{t.navDraft}</span>
+            </button>
 
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  disabled={!s.enabled || busy}
-                  onClick={() => {
-                    if (s.enabled) {
-                      stopVoiceInput();
-                      handleStopSpeaking();
-                      setStep(s.id);
-                    }
+            <button
+              type="button"
+              role="tab"
+              aria-selected={dashboardTab === "saved"}
+              onClick={() => setDashboardTab("saved")}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-3 text-xs sm:text-sm font-semibold rounded-xl transition-all min-h-[48px] ${
+                dashboardTab === "saved"
+                  ? "bg-white text-slate-950 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <BookmarkCheck className="w-4 h-4 text-blue-700 shrink-0 hidden sm:block" aria-hidden="true" />
+              <span className="truncate">
+                {it.navTracker}
+                {savedRecords.length > 0 ? ` (${savedRecords.length})` : ""}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={dashboardTab === "portals"}
+              onClick={() => setDashboardTab("portals")}
+              className={`inline-flex items-center justify-center gap-2 px-3 py-3 text-xs sm:text-sm font-semibold rounded-xl transition-all min-h-[48px] ${
+                dashboardTab === "portals"
+                  ? "bg-white text-slate-950 shadow-xs"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Landmark className="w-4 h-4 text-blue-700 shrink-0 hidden sm:block" aria-hidden="true" />
+              <span className="truncate">{t.navPortals}</span>
+            </button>
+          </div>
+
+          {/* VIEW 1: Guided 3-Step Complaint Writer */}
+          {dashboardTab === "write" && (
+            <>
+              {/* Calm 3-Step Progress Bar */}
+              <nav
+                aria-label="Complaint drafting steps"
+                className="no-print mb-6 grid grid-cols-3 border border-slate-200/90 bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden divide-x divide-slate-200/80"
+              >
+                {steps.map((s, idx) => {
+                  const isCurrent = step === s.id;
+                  const currentIdx = steps.findIndex((item) => item.id === step);
+                  const isCompleted = idx < currentIdx && s.enabled;
+
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={!s.enabled || busy}
+                      onClick={() => {
+                        if (s.enabled) {
+                          stopVoiceInput();
+                          handleStopSpeaking();
+                          setStep(s.id);
+                        }
+                      }}
+                      className={`px-2.5 sm:px-5 py-3.5 text-start transition-colors min-h-[52px] ${
+                        isCurrent
+                          ? "bg-slate-900 text-white"
+                          : s.enabled
+                            ? "bg-white text-slate-800 hover:bg-slate-50"
+                            : "bg-slate-50/70 text-slate-400 cursor-not-allowed"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 sm:gap-2.5">
+                        {isCompleted ? (
+                          <Check
+                            className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <span
+                            className={`font-mono text-xs tabular-nums shrink-0 ${
+                              isCurrent ? "text-blue-300" : "text-slate-400"
+                            }`}
+                          >
+                            {s.number}
+                          </span>
+                        )}
+                        <span className="text-xs sm:text-sm font-medium truncate">
+                          {s.label}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {step === "describe" && (
+                <ComplaintForm
+                  t={t}
+                  st={st}
+                  it={it}
+                  form={form}
+                  onChange={handleFieldChange}
+                  onApplySample={handleApplySample}
+                  onReset={handleResetForm}
+                  onSubmit={beginComplaint}
+                  onAutoDetectFromVoice={handleAutoDetectFromVoice}
+                  extractingVoice={extractingVoice}
+                  autoFillNotice={autoFillNotice}
+                  onScanEvidenceFile={(file) => void handleScanEvidenceFile(file)}
+                  scanningEvidence={scanningEvidence}
+                  scanPreviewUrl={scanPreviewUrl}
+                  scanNotice={scanNotice}
+                  onGpsLocationResolved={handleGpsLocationResolved}
+                  autosaved={autosaved}
+                  busy={busy}
+                  isListening={voiceRecorder.isRecording && voiceTarget === "complaint"}
+                  isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "complaint"}
+                  voiceAudioLevel={voiceRecorder.audioLevel}
+                  voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
+                  voiceLiveTranscript={voiceTarget === "complaint" ? voiceRecorder.liveTranscript : ""}
+                  speechSupported={speechSupported}
+                  onToggleVoice={() => startVoiceInput("complaint")}
+                  speechOutputSupported={speechOutputSupported}
+                  isReadingGuide={isReadingGuide}
+                  onToggleReadGuide={handleToggleReadGuide}
+                  errorMessage={errorMessage}
+                  fieldErrors={fieldErrors}
+                />
+              )}
+
+              {step === "clarify" && (
+                <ClarifyChat
+                  t={t}
+                  language={form.language}
+                  categoryLabel={t.categories[form.category] ?? form.category}
+                  locationLabel={locationLabel}
+                  messages={messages}
+                  answers={answers}
+                  currentQuestion={currentQuestion}
+                  answerInput={answerInput}
+                  onAnswerInputChange={setAnswerInput}
+                  onSubmitAnswer={submitAnswer}
+                  onSkipToDraft={() => generateDraftWithAnswers(answers, "English")}
+                  onBackToForm={() => {
+                    stopVoiceInput();
+                    handleStopSpeaking();
+                    setStep("describe");
                   }}
-                  className={`px-2.5 sm:px-5 py-3.5 text-start transition-colors min-h-[54px] ${
-                    isCurrent
-                      ? "bg-slate-900 text-white"
-                      : s.enabled
-                        ? "bg-white text-slate-800 hover:bg-slate-50"
-                        : "bg-slate-50/70 text-slate-400 cursor-not-allowed"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 sm:gap-2.5">
-                    {isCompleted ? (
-                      <Check
-                        className="w-3.5 h-3.5 text-emerald-600 shrink-0"
-                        aria-hidden="true"
-                      />
-                    ) : (
-                      <span
-                        className={`font-mono text-xs tabular-nums shrink-0 ${
-                          isCurrent ? "text-blue-300" : "text-slate-400"
-                        }`}
-                      >
-                        {s.number}
-                      </span>
-                    )}
-                    <span className="text-xs sm:text-sm font-medium truncate">
-                      {s.label}
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </nav>
+                  busy={busy}
+                  isListening={voiceRecorder.isRecording && voiceTarget === "answer"}
+                  isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "answer"}
+                  voiceAudioLevel={voiceRecorder.audioLevel}
+                  voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
+                  voiceLiveTranscript={voiceTarget === "answer" ? voiceRecorder.liveTranscript : ""}
+                  speechSupported={speechSupported}
+                  onToggleVoice={() => startVoiceInput("answer")}
+                  isSpeakingId={speakingMessageId}
+                  speechOutputSupported={speechOutputSupported}
+                  autoReadAloud={autoReadAloud}
+                  onToggleAutoRead={() => setAutoReadAloud((v) => !v)}
+                  onSpeakMessage={handleSpeakMessage}
+                  onStopSpeaking={handleStopSpeaking}
+                  onRetryQuestion={() => void askNextQuestion(answers, askedQuestions, messages)}
+                  errorMessage={errorMessage}
+                />
+              )}
 
-          {/* Active Step View */}
-          {step === "describe" && (
-            <ComplaintForm
-              t={t}
-              st={st}
+              {step === "review" && draftData && (
+                <DraftReview
+                  t={t}
+                  st={st}
+                  it={it}
+                  form={form}
+                  draftData={draftData}
+                  subject={editableSubject}
+                  draftText={editableDraft}
+                  onSubjectChange={setEditableSubject}
+                  onDraftTextChange={setEditableDraft}
+                  userLanguage={form.language}
+                  draftLanguage={draftLanguage}
+                  onRegenerate={(lang) => generateDraftWithAnswers(answers, lang)}
+                  onBackToClarify={() => setStep("clarify")}
+                  onBackToForm={() => setStep("describe")}
+                  portalGuidance={portalGuidance}
+                  busy={busy}
+                  errorMessage={errorMessage}
+                  onOpenAssistant={handleOpenAssistant}
+                  attachments={attachments}
+                  onAttachmentsChange={setAttachments}
+                  isSavedToTracker={activeSavedId !== null}
+                  onSaveToTracker={handleSaveToTracker}
+                />
+              )}
+            </>
+          )}
+
+          {/* VIEW 2: Saved Complaints & Follow-Up Tracker */}
+          {dashboardTab === "saved" && (
+            <ComplaintTrackerSection
               it={it}
-              form={form}
-              onChange={handleFieldChange}
-              onApplySample={handleApplySample}
-              onReset={handleResetForm}
-              onSubmit={beginComplaint}
-              onAutoDetectFromVoice={handleAutoDetectFromVoice}
-              extractingVoice={extractingVoice}
-              autoFillNotice={autoFillNotice}
-              onScanEvidenceFile={(file) => void handleScanEvidenceFile(file)}
-              scanningEvidence={scanningEvidence}
-              scanPreviewUrl={scanPreviewUrl}
-              scanNotice={scanNotice}
-              onGpsLocationResolved={handleGpsLocationResolved}
-              onOpenHandsFree={() => setHandsFreeOpen(true)}
-              autosaved={autosaved}
-              busy={busy}
-              isListening={voiceRecorder.isRecording && voiceTarget === "complaint"}
-              isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "complaint"}
-              voiceAudioLevel={voiceRecorder.audioLevel}
-              voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
-              voiceLiveTranscript={voiceTarget === "complaint" ? voiceRecorder.liveTranscript : ""}
-              speechSupported={speechSupported}
-              onToggleVoice={() => startVoiceInput("complaint")}
-              speechOutputSupported={speechOutputSupported}
-              isReadingGuide={isReadingGuide}
-              onToggleReadGuide={handleToggleReadGuide}
-              errorMessage={errorMessage}
-              fieldErrors={fieldErrors}
+              records={savedRecords}
+              escalatingId={escalatingId}
+              onUpdateRecord={handleUpdateTrackerRecord}
+              onDeleteRecord={handleDeleteTrackerRecord}
+              onGenerateEscalation={(rec) => void handleGenerateEscalationFromTracker(rec)}
+              onLoadRecordIntoReview={handleLoadTrackerRecord}
             />
           )}
 
-          {step === "clarify" && (
-            <ClarifyChat
-              t={t}
-              language={form.language}
-              categoryLabel={t.categories[form.category] ?? form.category}
-              locationLabel={locationLabel}
-              messages={messages}
-              answers={answers}
-              currentQuestion={currentQuestion}
-              answerInput={answerInput}
-              onAnswerInputChange={setAnswerInput}
-              onSubmitAnswer={submitAnswer}
-              onSkipToDraft={() => generateDraftWithAnswers(answers, "English")}
-              onBackToForm={() => {
-                stopVoiceInput();
-                handleStopSpeaking();
-                setStep("describe");
-              }}
-              busy={busy}
-              isListening={voiceRecorder.isRecording && voiceTarget === "answer"}
-              isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "answer"}
-              voiceAudioLevel={voiceRecorder.audioLevel}
-              voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
-              voiceLiveTranscript={voiceTarget === "answer" ? voiceRecorder.liveTranscript : ""}
-              speechSupported={speechSupported}
-              onToggleVoice={() => startVoiceInput("answer")}
-              isSpeakingId={speakingMessageId}
-              speechOutputSupported={speechOutputSupported}
-              autoReadAloud={autoReadAloud}
-              onToggleAutoRead={() => setAutoReadAloud((v) => !v)}
-              onSpeakMessage={handleSpeakMessage}
-              onStopSpeaking={handleStopSpeaking}
-              onRetryQuestion={() => void askNextQuestion(answers, askedQuestions, messages)}
-              errorMessage={errorMessage}
-            />
-          )}
+          {/* VIEW 3: Verified Official Portals & How It Works */}
+          {dashboardTab === "portals" && (
+            <div className="space-y-6">
+              <section
+                id="official-portals"
+                className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+              >
+                <h2 className="font-display text-2xl font-bold tracking-tight text-slate-950">
+                  {t.commonPortalsTitle}
+                </h2>
+                <p className="mt-1.5 text-sm text-slate-600 max-w-2xl leading-relaxed">
+                  {t.commonPortalsSub}
+                </p>
 
-          {step === "review" && draftData && (
-            <DraftReview
-              t={t}
-              st={st}
-              it={it}
-              form={form}
-              draftData={draftData}
-              subject={editableSubject}
-              draftText={editableDraft}
-              onSubjectChange={setEditableSubject}
-              onDraftTextChange={setEditableDraft}
-              userLanguage={form.language}
-              draftLanguage={draftLanguage}
-              onRegenerate={(lang) => generateDraftWithAnswers(answers, lang)}
-              onBackToClarify={() => setStep("clarify")}
-              onBackToForm={() => setStep("describe")}
-              portalGuidance={portalGuidance}
-              busy={busy}
-              errorMessage={errorMessage}
-              onOpenAssistant={handleOpenAssistant}
-              attachments={attachments}
-              onAttachmentsChange={setAttachments}
-              isSavedToTracker={activeSavedId !== null}
-              onSaveToTracker={handleSaveToTracker}
-            />
-          )}
-        </section>
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {FEATURED_OFFICIAL_PORTALS.map((rawPortal) => {
+                    const portal = localizePortalEntry(rawPortal, form.language);
+                    const langSupport = rawPortal.id
+                      ? PORTAL_LANGUAGE_SUPPORT[rawPortal.id]
+                      : undefined;
+                    const langSupportLabel =
+                      langSupport?.supportedNoteKey === "tamilAndEnglish"
+                        ? st.portalLangTamilAndEnglish
+                        : langSupport?.supportedNoteKey === "hindiAndEnglish"
+                          ? st.portalLangHindiAndEnglish
+                          : langSupport?.supportedNoteKey === "multiIndian"
+                            ? st.portalLangMultiIndian
+                            : st.portalLangEnglishOnly;
 
-        {/* Innovation 4: Personal Complaint Tracker & Escalation Reminders Vault */}
-        <ComplaintTrackerSection
-          it={it}
-          records={savedRecords}
-          escalatingId={escalatingId}
-          onUpdateRecord={handleUpdateTrackerRecord}
-          onDeleteRecord={handleDeleteTrackerRecord}
-          onGenerateEscalation={(rec) => void handleGenerateEscalationFromTracker(rec)}
-          onLoadRecordIntoReview={handleLoadTrackerRecord}
-        />
-
-        {/* How It Works Section (Localized) */}
-        <section id="how-it-works" className="no-print border-t border-slate-200 bg-white py-14">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">
-              {t.howItWorksTitle}
-            </h2>
-            <p className="mt-2 text-sm text-slate-600 max-w-2xl leading-relaxed">
-              {t.howItWorksSub}
-            </p>
-
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-8">
-              <div className="pt-4 border-t border-slate-200">
-                <h3 className="text-base font-semibold text-slate-900">{t.how1Title}</h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">{t.how1Desc}</p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-200">
-                <h3 className="text-base font-semibold text-slate-900">{t.how2Title}</h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">{t.how2Desc}</p>
-              </div>
-
-              <div className="pt-4 border-t border-slate-200">
-                <h3 className="text-base font-semibold text-slate-900">{t.how3Title}</h3>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">{t.how3Desc}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Verified Official Portals Reference */}
-        <section
-          id="official-portals"
-          className="no-print border-t border-slate-200 bg-slate-50 py-14"
-        >
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-slate-950">
-              {t.commonPortalsTitle}
-            </h2>
-            <p className="mt-2 text-sm text-slate-600 max-w-2xl leading-relaxed">
-              {t.commonPortalsSub}
-            </p>
-
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {FEATURED_OFFICIAL_PORTALS.map((rawPortal) => {
-                const portal = localizePortalEntry(rawPortal, form.language);
-                const langSupport = rawPortal.id
-                  ? PORTAL_LANGUAGE_SUPPORT[rawPortal.id]
-                  : undefined;
-                const langSupportLabel =
-                  langSupport?.supportedNoteKey === "tamilAndEnglish"
-                    ? st.portalLangTamilAndEnglish
-                    : langSupport?.supportedNoteKey === "hindiAndEnglish"
-                      ? st.portalLangHindiAndEnglish
-                      : langSupport?.supportedNoteKey === "multiIndian"
-                        ? st.portalLangMultiIndian
-                        : st.portalLangEnglishOnly;
-
-                return (
-                  <div
-                    key={portal.url}
-                    className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
-                  >
-                    <div>
-                      <p className="text-xs text-slate-500">{portal.authorityScope}</p>
-                      <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
-                        {portal.name}
-                      </h3>
-                      <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
-                        {portal.description}
-                      </p>
-                      <p className="mt-2.5 text-xs text-slate-500 flex items-start gap-1.5 leading-relaxed">
-                        <Globe
-                          className="w-3.5 h-3.5 text-blue-700 mt-0.5 shrink-0"
-                          aria-hidden="true"
-                        />
-                        <span>{langSupportLabel}</span>
-                      </p>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-4">
-                      <span className="text-xs font-mono tabular-nums text-slate-500 truncate">
-                        {portal.helpline
-                          ? `${t.helplineLabel}: ${portal.helpline}`
-                          : portal.domain ?? portal.url.replace("https://", "")}
-                      </span>
-                      <a
-                        href={portal.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
+                    return (
+                      <div
+                        key={portal.url}
+                        className="bg-slate-50/60 border border-slate-200/90 rounded-xl p-4 sm:p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
                       >
-                        {t.visitPortal}
-                        <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-                      </a>
-                    </div>
+                        <div>
+                          <p className="text-xs text-slate-500">{portal.authorityScope}</p>
+                          <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
+                            {portal.name}
+                          </h3>
+                          <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
+                            {portal.description}
+                          </p>
+                          <p className="mt-2.5 text-xs text-slate-500 flex items-start gap-1.5 leading-relaxed">
+                            <Globe
+                              className="w-3.5 h-3.5 text-blue-700 mt-0.5 shrink-0"
+                              aria-hidden="true"
+                            />
+                            <span>{langSupportLabel}</span>
+                          </p>
+                        </div>
+                        <div className="mt-4 pt-3 border-t border-slate-200/80 flex items-center justify-between gap-4">
+                          <span className="text-xs font-mono tabular-nums text-slate-500 truncate">
+                            {portal.helpline
+                              ? `${t.helplineLabel}: ${portal.helpline}`
+                              : portal.domain ?? portal.url.replace("https://", "")}
+                          </span>
+                          <a
+                            href={portal.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700 hover:text-blue-900 whitespace-nowrap shrink-0"
+                          >
+                            {t.visitPortal}
+                            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <section
+                id="how-it-works"
+                className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+              >
+                <h2 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-slate-950">
+                  {t.howItWorksTitle}
+                </h2>
+                <p className="mt-1.5 text-sm text-slate-600 max-w-2xl leading-relaxed">
+                  {t.howItWorksSub}
+                </p>
+
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="pt-4 border-t border-slate-200">
+                    <h3 className="text-base font-semibold text-slate-900">{t.how1Title}</h3>
+                    <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how1Desc}</p>
                   </div>
-                );
-              })}
+
+                  <div className="pt-4 border-t border-slate-200">
+                    <h3 className="text-base font-semibold text-slate-900">{t.how2Title}</h3>
+                    <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how2Desc}</p>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-200">
+                    <h3 className="text-base font-semibold text-slate-900">{t.how3Title}</h3>
+                    <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how3Desc}</p>
+                  </div>
+                </div>
+              </section>
             </div>
-          </div>
+          )}
         </section>
 
-        {/* Privacy & Trust */}
-        <section id="privacy" className="no-print border-t border-slate-200/80 bg-white py-12">
+        {/* Quiet Privacy & Trust Strip */}
+        <section id="privacy" className="no-print border-t border-slate-200/80 bg-white py-10">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-slate-700 mt-0.5 shrink-0" aria-hidden="true" />
               <div>
-                <h2 className="font-display text-lg font-semibold text-slate-950">
+                <h2 className="font-display text-base sm:text-lg font-semibold text-slate-950">
                   {t.privacyTitle}
                 </h2>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-slate-600 leading-relaxed">
+                <div className="mt-2.5 grid grid-cols-1 md:grid-cols-3 gap-5 text-sm text-slate-600 leading-relaxed">
                   <p>
                     <strong className="font-medium text-slate-900">
                       {t.privacy1Title}:
@@ -1424,37 +1468,37 @@ export default function App() {
       </main>
 
       {/* Clean Quiet Footer */}
-      <footer className="no-print border-t border-slate-200/80 bg-slate-50 pt-8 pb-24 sm:pb-10">
+      <footer className="no-print border-t border-slate-200/80 bg-slate-50 pt-7 pb-24 sm:pb-9">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-slate-500">
           <p>{t.footerText}</p>
           <div className="flex items-center gap-5 shrink-0">
-            <a href="#workspace" className="hover:text-slate-900 transition-colors whitespace-nowrap">
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("write")}
+              className="hover:text-slate-900 transition-colors whitespace-nowrap"
+            >
               {t.navDraft}
-            </a>
-            <a href="#complaint-tracker" className="hover:text-slate-900 transition-colors whitespace-nowrap">
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("saved")}
+              className="hover:text-slate-900 transition-colors whitespace-nowrap"
+            >
               {it.navTracker}
-            </a>
-            <a href="#official-portals" className="hover:text-slate-900 transition-colors whitespace-nowrap">
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToDashboardTab("portals")}
+              className="hover:text-slate-900 transition-colors whitespace-nowrap"
+            >
               {t.navPortals}
-            </a>
+            </button>
             <a href="#privacy" className="hover:text-slate-900 transition-colors whitespace-nowrap">
               {t.navPrivacy}
             </a>
           </div>
         </div>
       </footer>
-
-      {/* Innovation 7: 4-Step Hands-Free Guided Voice Interview Modal */}
-      <HandsFreeVoiceModal
-        open={handsFreeOpen}
-        onClose={() => setHandsFreeOpen(false)}
-        language={form.language}
-        it={it}
-        initialComplaint={form.complaint}
-        initialName={form.name}
-        initialPhone={form.contact}
-        onComplete={handleHandsFreeComplete}
-      />
 
       {/* Multi-turn Gemini Portal & Submission Assistant Chatbot */}
       <div className="no-print">

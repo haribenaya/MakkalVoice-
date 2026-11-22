@@ -25,8 +25,8 @@ const TRANSCRIBE_MODELS = [
   "gemini-3.1-flash-lite",
   "gemini-4-hydrogen",
 ] as const;
-const REQUEST_TIMEOUT_MS = 18_000;
-const ATTEMPT_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 28_000;
+const ATTEMPT_TIMEOUT_MS = 16_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
 
 function thinkingConfigForModel(model: string) {
@@ -272,6 +272,77 @@ function isRetryableGeminiError(error: unknown): boolean {
   );
 }
 
+async function runHedgedWave<T>(
+  models: readonly string[],
+  runForModel: (model: string) => Promise<T>,
+  attemptTimeoutMs: number,
+  hedgeDelayMs = 3500,
+): Promise<T> {
+  if (models.length === 0) {
+    throw new Error("No AI models configured.");
+  }
+  if (models.length === 1) {
+    return withTimeout(runForModel(models[0]), attemptTimeoutMs);
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    let remaining = models.length;
+    let lastError: unknown;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const started = new Set<number>();
+
+    const cleanupTimers = () => {
+      for (const t of timers) clearTimeout(t);
+      timers.length = 0;
+    };
+
+    const launch = (idx: number) => {
+      if (settled || idx >= models.length || started.has(idx)) return;
+      started.add(idx);
+      const model = models[idx];
+      withTimeout(runForModel(model), attemptTimeoutMs)
+        .then((result) => {
+          if (settled) return;
+          settled = true;
+          cleanupTimers();
+          resolve(result);
+        })
+        .catch((err) => {
+          if (settled) return;
+          lastError = err;
+          const errMsg = String((err as Error)?.message ?? "");
+          console.warn(
+            `[MakkalVoice AI] hedged attempt (${model}) failed:`,
+            errMsg.slice(0, 180),
+          );
+          remaining -= 1;
+          // If this attempt failed quickly, immediately start the next unstarted backup
+          for (let next = idx + 1; next < models.length; next += 1) {
+            if (!started.has(next)) {
+              launch(next);
+              break;
+            }
+          }
+          if (remaining <= 0) {
+            settled = true;
+            cleanupTimers();
+            reject(lastError ?? new Error("All AI models failed to respond."));
+          }
+        });
+    };
+
+    // Start primary model immediately
+    launch(0);
+
+    // Schedule backup models as hedged parallel fallbacks if primary is slow
+    for (let i = 1; i < models.length; i += 1) {
+      const timer = setTimeout(() => launch(i), hedgeDelayMs * i);
+      timers.push(timer);
+    }
+  });
+}
+
 async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
@@ -279,31 +350,20 @@ async function generateWithFailover<T>(
   rounds = 2,
 ): Promise<T> {
   let lastError: unknown;
-  const sequence: string[] = [];
   for (let r = 0; r < rounds; r += 1) {
-    for (const m of models) sequence.push(m);
-  }
-
-  for (let i = 0; i < sequence.length; i += 1) {
-    const model = sequence[i];
     try {
-      return await withTimeout(runForModel(model), attemptTimeoutMs);
+      return await runHedgedWave(models, runForModel, attemptTimeoutMs, r === 0 ? 3500 : 1500);
     } catch (err) {
       lastError = err;
       const errMsg = String((err as Error)?.message ?? "");
-      console.warn(
-        `[MakkalVoice AI] attempt ${i + 1}/${sequence.length} (${model}) failed:`,
-        errMsg.slice(0, 180),
-      );
       if (
         !isRetryableGeminiError(err) &&
         !/INVALID_ARGUMENT|unsupported|not found/i.test(errMsg)
       ) {
         throw err;
       }
-      if (i < sequence.length - 1) {
-        const delayMs = Math.min(2400, 450 * Math.pow(1.6, i));
-        await new Promise((r) => setTimeout(r, delayMs));
+      if (r < rounds - 1) {
+        await new Promise((res) => setTimeout(res, 500));
       }
     }
   }
@@ -1029,14 +1089,14 @@ async function startServer() {
         "You are MakkalVoice, an expert Indian civic complaint, RTI, and escalation drafter and official portal router.",
         "Your job has TWO equally critical parts:",
         "PART A — Formal Original Draft:",
-        `1. Write 'subject' and 'draft' strictly in ${draftLanguage}.`,
+        `1. Write 'subject' (1 concise line) and 'draft' (crisp, polite, complete official letter ~130-220 words) strictly in ${draftLanguage}.`,
         "2. Use ONLY facts explicitly given by the citizen. NEVER invent dates, house numbers, bill numbers, or officer names.",
         "3. Use the exact literal placeholders [COMPLAINANT_NAME] and [CONTACT_DETAILS] at the signature block so personal details stay on the citizen's device.",
         `4. ${modeInstruction}`,
-        "PART B — Exact Official Portal Selection, Filing Steps & Document Checklist:",
+        "PART B — Exact Official Portal Selection & Short Filing Steps:",
         "5. From the VERIFIED PORTAL CATALOG provided in the prompt, choose the EXACT best 'primaryPortalId' and 'secondaryPortalId' that match BOTH the document mode & topic (RTI -> rti_online; electricity -> state electricity board like tangedco_tn/bescom_karnataka/mahavitaran_mh; Chennai water/sewage -> cmwssb_chennai; Chennai streetlight/road -> gcc_chennai; railway -> railmadad; bank/UPI -> rbi_cms; cyber scam -> cybercrime_india; consumer bill -> national_consumer; legal aid -> nalsa_legal; state civic/ration/pension -> state grievance portal; central escalation -> cpgrams) AND the citizen's state/district.",
         "6. ONLY return IDs that appear verbatim in the VERIFIED PORTAL CATALOG.",
-        `7. Write 'suggestedAuthority', 'summaryPoints', 'whyThisPortal', 'portalLanguageTip' (1 concise sentence in ${uiLanguage} telling the citizen whether the selected official portal offers a language switch button such as Tamil/Hindi or is mostly in English and reminding them they can copy-paste each prepared English field directly), 'filingSteps' (4-5 clear, actionable steps explaining how to log in, pick the right department/category, paste the draft, upload attachments, and save the tracking number on that exact portal), 'requiredDocuments' (4-5 practical supporting documents/proofs the citizen may need to attach for this exact complaint type and portal, each with 'title', short helpful 'detail', and boolean 'mandatory'), and 'englishButtonGuide' (5-6 objects mapping exact English button/field labels the citizen will see on that government portal — like 'Register / Lodge Grievance', 'Mobile OTP', 'Select Department', 'Grievance Description', 'Upload Document', 'Submit' — to clear, simple meanings in ${uiLanguage}) strictly in ${uiLanguage}.`,
+        `7. Write 'suggestedAuthority' (short official office title), 'summaryPoints' (3 concise factual bullets), 'whyThisPortal' (1 short clear sentence), and 'filingSteps' (4 short, simple step-by-step actions to submit on that portal and save the tracking number) strictly in ${uiLanguage}.`,
       ].join("\n");
 
       const prompt = [
@@ -1074,77 +1134,45 @@ async function startServer() {
               systemInstruction,
               thinkingConfig: thinkingConfigForModel(model),
               responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                subject: { type: Type.STRING },
-                draft: { type: Type.STRING },
-                suggestedAuthority: { type: Type.STRING },
-                summaryPoints: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                },
-                primaryPortalId: {
-                  type: Type.STRING,
-                  description: `Must be one of: ${VERIFIED_PORTAL_IDS.join(", ")}`,
-                },
-                secondaryPortalId: {
-                  type: Type.STRING,
-                  description: `Must be a different ID from: ${VERIFIED_PORTAL_IDS.join(", ")}`,
-                },
-                whyThisPortal: {
-                  type: Type.STRING,
-                  description: `Short 1-2 sentence explanation in ${uiLanguage} of why this official portal is the correct place for this complaint.`,
-                },
-                portalLanguageTip: {
-                  type: Type.STRING,
-                  description: `1 clear sentence in ${uiLanguage} telling the citizen if this government portal has a regional language switcher or is English-only, and how to use the prepared English fields.`,
-                },
-                filingSteps: {
-                  type: Type.ARRAY,
-                  items: { type: Type.STRING },
-                  description: `4-5 practical step-by-step instructions in ${uiLanguage} to submit this original complaint on the selected official portal.`,
-                },
-                requiredDocuments: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      title: { type: Type.STRING },
-                      detail: { type: Type.STRING },
-                      mandatory: { type: Type.BOOLEAN },
-                    },
-                    required: ["title", "detail", "mandatory"],
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  subject: { type: Type.STRING },
+                  draft: { type: Type.STRING },
+                  suggestedAuthority: { type: Type.STRING },
+                  summaryPoints: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
                   },
-                  description: `4-5 supporting documents, photos, bills, or IDs in ${uiLanguage} that the citizen may need to attach when filing on the matched portal.`,
-                },
-                englishButtonGuide: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      englishLabel: { type: Type.STRING },
-                      localMeaning: { type: Type.STRING },
-                    },
-                    required: ["englishLabel", "localMeaning"],
+                  primaryPortalId: {
+                    type: Type.STRING,
+                    description: `Must be one of: ${VERIFIED_PORTAL_IDS.join(", ")}`,
                   },
-                  description: `5-6 exact English portal buttons or form headings paired with their clear meaning in ${uiLanguage}.`,
+                  secondaryPortalId: {
+                    type: Type.STRING,
+                    description: `Must be a different ID from: ${VERIFIED_PORTAL_IDS.join(", ")}`,
+                  },
+                  whyThisPortal: {
+                    type: Type.STRING,
+                    description: `1 short sentence in ${uiLanguage} explaining why this official portal is the right place.`,
+                  },
+                  filingSteps: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                    description: `4 short, simple filing steps in ${uiLanguage} for this official portal.`,
+                  },
                 },
+                required: [
+                  "subject",
+                  "draft",
+                  "suggestedAuthority",
+                  "summaryPoints",
+                  "primaryPortalId",
+                  "secondaryPortalId",
+                  "whyThisPortal",
+                  "filingSteps",
+                ],
               },
-              required: [
-                "subject",
-                "draft",
-                "suggestedAuthority",
-                "summaryPoints",
-                "primaryPortalId",
-                "secondaryPortalId",
-                "whyThisPortal",
-                "portalLanguageTip",
-                "filingSteps",
-                "requiredDocuments",
-                "englishButtonGuide",
-              ],
-            },
             },
           }),
         REQUEST_TIMEOUT_MS,

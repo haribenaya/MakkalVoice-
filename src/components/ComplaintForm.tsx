@@ -3,9 +3,9 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
+  ChevronDown,
   FileText,
   Hash,
-  Headphones,
   Loader2,
   Lock,
   MapPin,
@@ -56,7 +56,6 @@ interface ComplaintFormProps {
   scanPreviewUrl: string | null;
   scanNotice: string | null;
   onGpsLocationResolved: (result: GpsLocationResult) => void;
-  onOpenHandsFree: () => void;
   autosaved: boolean;
   busy: boolean;
   isListening: boolean;
@@ -90,7 +89,6 @@ export function ComplaintForm({
   scanPreviewUrl,
   scanNotice,
   onGpsLocationResolved,
-  onOpenHandsFree,
   autosaved,
   busy,
   isListening,
@@ -124,13 +122,15 @@ export function ComplaintForm({
     { id: "escalation", label: it.modeEscalation },
   ];
 
+  const isSpecialMode = form.mode !== "complaint";
+
   return (
     <section
       id="complaint-form"
       aria-labelledby="describe-heading"
       className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
     >
-      {/* Clean Header Row (Only 2 quiet utility controls — zero tab clutter) */}
+      {/* Calm Header Row */}
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-6 border-b border-slate-200/80">
         <div>
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
@@ -191,313 +191,231 @@ export function ComplaintForm({
 
       <form
         noValidate
-        className="mt-7 space-y-9"
+        className="mt-7 space-y-8"
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit();
         }}
       >
-        {/* SECTION 01: Choose Document Type */}
-        <div className="space-y-3">
-          <div className="flex items-baseline gap-2.5">
-            <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
-              01
+        {/* PART 1: Speak, Scan Photo/Bill, or Type Your Problem */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-700 text-white font-mono text-xs font-semibold tabular-nums shrink-0">
+              1
             </span>
-            <h3 className="font-display text-base font-semibold text-slate-950">
-              {it.filingModeLabel}
+            <h3 className="font-display text-base sm:text-lg font-semibold text-slate-950">
+              {st.step1Part1Title}
             </h3>
           </div>
 
-          <div
-            role="group"
-            aria-label={it.filingModeLabel}
-            className="grid grid-cols-1 sm:grid-cols-3 gap-2.5"
-          >
-            {modes.map((m) => {
-              const selected = form.mode === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onChange("mode", m.id)}
-                  className={`px-4 py-3 text-sm font-medium rounded-xl border text-start transition-colors min-h-[46px] ${
-                    selected
-                      ? "bg-slate-900 text-white border-slate-900 font-semibold"
-                      : "bg-slate-50/70 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950"
-                  }`}
-                >
-                  {m.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {form.mode === "rti" && (
-            <p className="text-xs text-blue-900 bg-blue-50/70 border border-blue-200/80 rounded-xl px-4 py-3 leading-relaxed">
-              {it.modeRtiHint}
-            </p>
-          )}
-
-          {form.mode === "escalation" && (
-            <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2.5">
-              <p className="text-xs text-amber-950 leading-relaxed">{it.modeEscalationHint}</p>
-              <div>
-                <label
-                  htmlFor="previous-ticket-input"
-                  className="block text-xs font-semibold text-slate-800"
-                >
-                  {it.previousTicketIdLabel}
-                </label>
-                <input
-                  id="previous-ticket-input"
-                  type="text"
-                  value={form.previousTicketId}
-                  onChange={(e) => onChange("previousTicketId", e.target.value)}
-                  disabled={busy}
-                  placeholder={it.previousTicketIdPlaceholder}
-                  className="mt-1 w-full h-11 px-3.5 text-sm font-mono text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* SECTION 02: Speak, Scan Photo/Bill, or Describe Your Problem */}
-        <div className="pt-7 border-t border-slate-200/80 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-baseline gap-2.5">
-              <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
-                02
-              </span>
-              <h3 className="font-display text-base font-semibold text-slate-950">
-                {st.step1Part1Title}
-              </h3>
-            </div>
-
-            {speechSupported && (
-              <button
-                type="button"
-                onClick={onOpenHandsFree}
-                disabled={busy || isListening || isTranscribing}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-700 hover:text-blue-900 underline underline-offset-4 transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                <Headphones className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {it.handsFreeBtn}
-              </button>
-            )}
-          </div>
-
-          <div className="bg-blue-50/35 border border-blue-200/70 rounded-2xl p-4 sm:p-6 space-y-4">
-            {/* Clean 2-Button Voice & Photo Input Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={onToggleVoice}
-                disabled={busy || isTranscribing || !speechSupported}
-                aria-pressed={isListening}
-                className={`w-full inline-flex items-center justify-center gap-2.5 px-5 py-3.5 text-sm sm:text-base font-semibold rounded-xl shadow-xs transition-all min-h-[54px] active:scale-[0.99] ${
-                  isListening
-                    ? "bg-red-600 text-white hover:bg-red-700"
-                    : "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-600"
-                }`}
-              >
-                {isTranscribing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin shrink-0" aria-hidden="true" />
-                    <span className="truncate">{getLocalizedError("CONVERTING_VOICE", form.language)}</span>
-                  </>
-                ) : isListening ? (
-                  <>
-                    <MicOff className="w-5 h-5 shrink-0" aria-hidden="true" />
-                    <span>
-                      {t.stopListening} ({elapsedLabel})
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-5 h-5 shrink-0" aria-hidden="true" />
-                    <span className="truncate">
-                      {t.tapToSpeak} ({activeLanguageObj?.nativeLabel ?? form.language})
-                    </span>
-                  </>
-                )}
-              </button>
-
-              <div>
-                <input
-                  ref={scanFileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) onScanEvidenceFile(file);
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={busy || scanningEvidence || isListening}
-                  onClick={() => scanFileInputRef.current?.click()}
-                  className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm sm:text-base font-medium text-slate-900 bg-white border border-slate-300/90 hover:bg-slate-50 rounded-xl transition-colors min-h-[54px] disabled:opacity-50"
-                >
-                  {scanningEvidence ? (
-                    <Loader2 className="w-5 h-5 animate-spin text-blue-700 shrink-0" aria-hidden="true" />
-                  ) : (
-                    <Camera className="w-5 h-5 text-blue-700 shrink-0" aria-hidden="true" />
-                  )}
+          {/* 2 Simple, Friendly Input Actions: Speak OR Scan Photo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              type="button"
+              onClick={onToggleVoice}
+              disabled={busy || isTranscribing || !speechSupported}
+              aria-pressed={isListening}
+              className={`w-full inline-flex items-center justify-center gap-2.5 px-5 py-3.5 text-sm sm:text-base font-semibold rounded-xl shadow-xs transition-all min-h-[54px] active:scale-[0.99] ${
+                isListening
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-blue-700 text-white hover:bg-blue-800 disabled:bg-slate-300 disabled:text-slate-600"
+              }`}
+            >
+              {isTranscribing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin shrink-0" aria-hidden="true" />
+                  <span className="truncate">{getLocalizedError("CONVERTING_VOICE", form.language)}</span>
+                </>
+              ) : isListening ? (
+                <>
+                  <MicOff className="w-5 h-5 shrink-0" aria-hidden="true" />
+                  <span>
+                    {t.stopListening} ({elapsedLabel})
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Mic className="w-5 h-5 shrink-0" aria-hidden="true" />
                   <span className="truncate">
-                    {scanningEvidence ? it.scanningPhoto : it.scanPhotoBtn}
+                    {t.tapToSpeak} ({activeLanguageObj?.nativeLabel ?? form.language})
                   </span>
-                </button>
-              </div>
-            </div>
+                </>
+              )}
+            </button>
 
-            {!speechSupported && (
-              <p className="text-xs text-amber-800">{t.voiceUnsupported}</p>
-            )}
-
-            {/* Live Recording Voice Level Bar */}
-            {isListening && (
-              <div
-                role="status"
-                aria-live="polite"
-                className="px-4 py-3.5 text-sm bg-red-50 text-red-900 border border-red-200 rounded-xl space-y-2"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold">{t.listeningNow}</span>
-                  <span className="font-mono text-xs font-semibold tabular-nums text-red-700">
-                    {elapsedLabel}
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-red-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-red-600 transition-all duration-75"
-                    style={{ width: `${Math.max(8, voiceAudioLevel)}%` }}
-                  />
-                </div>
-                {voiceLiveTranscript && (
-                  <p className="text-xs text-slate-800 bg-white/90 border border-red-200/70 rounded-lg px-3 py-2 leading-relaxed">
-                    <span className="font-semibold text-red-700 me-1.5">
-                      {getLocalizedError("LIVE_PREVIEW_LABEL", form.language)}:
-                    </span>
-                    {voiceLiveTranscript}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {scanNotice && (
-              <div
-                role="status"
-                className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3"
-              >
-                {scanPreviewUrl && (
-                  <img
-                    src={scanPreviewUrl}
-                    alt="Scanned evidence preview"
-                    className="w-12 h-12 rounded-lg object-cover border border-emerald-200 shrink-0"
-                  />
-                )}
-                <p className="text-xs font-medium text-emerald-900 leading-relaxed">
-                  {scanNotice}
-                </p>
-              </div>
-            )}
-
-            {autoFillNotice && (
-              <div
-                role="status"
-                className="px-4 py-2.5 text-xs font-medium text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl"
-              >
-                {autoFillNotice}
-              </div>
-            )}
-
-            {/* Problem Description Textarea */}
             <div>
+              <input
+                ref={scanFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onScanEvidenceFile(file);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                disabled={busy || scanningEvidence || isListening}
+                onClick={() => scanFileInputRef.current?.click()}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm sm:text-base font-medium text-slate-900 bg-slate-50 border border-slate-300/90 hover:bg-slate-100 rounded-xl transition-colors min-h-[54px] disabled:opacity-50"
+              >
+                {scanningEvidence ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-700 shrink-0" aria-hidden="true" />
+                ) : (
+                  <Camera className="w-5 h-5 text-blue-700 shrink-0" aria-hidden="true" />
+                )}
+                <span className="truncate">
+                  {scanningEvidence ? it.scanningPhoto : it.scanPhotoBtn}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {!speechSupported && (
+            <p className="text-xs text-amber-800">{t.voiceUnsupported}</p>
+          )}
+
+          {/* Live Recording Voice Level Bar */}
+          {isListening && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="px-4 py-3.5 text-sm bg-red-50 text-red-900 border border-red-200 rounded-xl space-y-2"
+            >
               <div className="flex items-center justify-between gap-2">
-                <label
-                  htmlFor="complaint-textarea"
-                  className="block text-sm font-medium text-slate-900"
-                >
-                  {t.complaintLabel}{" "}
-                  <span className="text-red-600" aria-hidden="true">*</span>
-                </label>
-                <span className="text-[11px] font-semibold text-red-700">
-                  {it.mandatoryTag}
+                <span className="font-semibold">{t.listeningNow}</span>
+                <span className="font-mono text-xs font-semibold tabular-nums text-red-700">
+                  {elapsedLabel}
                 </span>
               </div>
-              <textarea
-                id="complaint-textarea"
-                rows={4}
-                required
-                aria-invalid={Boolean(fieldErrors?.complaint)}
-                value={form.complaint}
-                onChange={(e) => onChange("complaint", e.target.value)}
-                disabled={busy}
-                placeholder={t.complaintPlaceholder}
-                className={`mt-2 w-full p-4 text-base leading-relaxed text-slate-950 bg-white border rounded-xl focus:outline-none focus:ring-2 transition-colors resize-y ${
-                  fieldErrors?.complaint
-                    ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
-                    : "border-slate-300/90 focus:border-blue-600 focus:ring-blue-600/15"
-                }`}
-              />
-              {fieldErrors?.complaint && (
-                <p className="mt-1.5 text-xs font-medium text-red-700">
-                  {t.errEmptyComplaint}
+              <div className="w-full h-2.5 bg-red-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-red-600 transition-all duration-75"
+                  style={{ width: `${Math.max(8, voiceAudioLevel)}%` }}
+                />
+              </div>
+              {voiceLiveTranscript && (
+                <p className="text-xs text-slate-800 bg-white/90 border border-red-200/70 rounded-lg px-3 py-2 leading-relaxed">
+                  <span className="font-semibold text-red-700 me-1.5">
+                    {getLocalizedError("LIVE_PREVIEW_LABEL", form.language)}:
+                  </span>
+                  {voiceLiveTranscript}
                 </p>
               )}
-              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-                <span>{t.reviewVoiceHint}</span>
-                <div className="flex items-center gap-3">
-                  {form.complaint.trim().length >= 8 && (
-                    <button
-                      type="button"
-                      onClick={onAutoDetectFromVoice}
-                      disabled={busy || extractingVoice}
-                      className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 underline underline-offset-4 disabled:opacity-50"
-                    >
-                      <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                      {extractingVoice ? t.autoFilling : t.autoFillVoice}
-                    </button>
-                  )}
-                  <span className="font-mono tabular-nums">{form.complaint.length} / 2500</span>
-                </div>
+            </div>
+          )}
+
+          {scanNotice && (
+            <div
+              role="status"
+              className="px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3"
+            >
+              {scanPreviewUrl && (
+                <img
+                  src={scanPreviewUrl}
+                  alt="Scanned evidence preview"
+                  className="w-12 h-12 rounded-lg object-cover border border-emerald-200 shrink-0"
+                />
+              )}
+              <p className="text-xs font-medium text-emerald-900 leading-relaxed">
+                {scanNotice}
+              </p>
+            </div>
+          )}
+
+          {autoFillNotice && (
+            <div
+              role="status"
+              className="px-4 py-2.5 text-xs font-medium text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl"
+            >
+              {autoFillNotice}
+            </div>
+          )}
+
+          {/* Problem Description Textarea */}
+          <div>
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="complaint-textarea"
+                className="block text-sm font-medium text-slate-900"
+              >
+                {t.complaintLabel}{" "}
+                <span className="text-red-600" aria-hidden="true">*</span>
+              </label>
+              <span className="text-[11px] font-semibold text-red-700">
+                {it.mandatoryTag}
+              </span>
+            </div>
+            <textarea
+              id="complaint-textarea"
+              rows={4}
+              required
+              aria-invalid={Boolean(fieldErrors?.complaint)}
+              value={form.complaint}
+              onChange={(e) => onChange("complaint", e.target.value)}
+              disabled={busy}
+              placeholder={t.complaintPlaceholder}
+              className={`mt-2 w-full p-4 text-base leading-relaxed text-slate-950 bg-slate-50/40 border rounded-xl focus:bg-white focus:outline-none focus:ring-2 transition-colors resize-y ${
+                fieldErrors?.complaint
+                  ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
+                  : "border-slate-300/90 focus:border-blue-600 focus:ring-blue-600/15"
+              }`}
+            />
+            {fieldErrors?.complaint && (
+              <p className="mt-1.5 text-xs font-medium text-red-700">
+                {t.errEmptyComplaint}
+              </p>
+            )}
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+              <span>{t.reviewVoiceHint}</span>
+              <div className="flex items-center gap-3">
+                {form.complaint.trim().length >= 8 && (
+                  <button
+                    type="button"
+                    onClick={onAutoDetectFromVoice}
+                    disabled={busy || extractingVoice}
+                    className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 underline underline-offset-4 disabled:opacity-50"
+                  >
+                    <MapPin className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {extractingVoice ? t.autoFilling : t.autoFillVoice}
+                  </button>
+                )}
+                <span className="font-mono tabular-nums">{form.complaint.length} / 2500</span>
               </div>
             </div>
+          </div>
 
-            {/* Localized Quick Examples */}
-            <div className="pt-3 border-t border-blue-200/50 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
-              <span className="font-medium text-slate-500">{t.tryExample}</span>
-              {SAMPLE_SCENARIOS.map((sample, idx) => (
-                <button
-                  key={sample.label}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onApplySample(idx)}
-                  className="text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
-                >
-                  {getLocalizedSampleLabel(idx, form.language, sample.label)}
-                </button>
-              ))}
-            </div>
+          {/* Quick Starter Examples */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
+            <span className="font-medium text-slate-500">{t.tryExample}</span>
+            {SAMPLE_SCENARIOS.map((sample, idx) => (
+              <button
+                key={sample.label}
+                type="button"
+                disabled={busy}
+                onClick={() => onApplySample(idx)}
+                className="text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {getLocalizedSampleLabel(idx, form.language, sample.label)}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* SECTION 03: Location — GPS Detect, Map Pinpoint & Address */}
+        {/* PART 2: Where Is the Problem? */}
         <div className="pt-7 border-t border-slate-200/80 space-y-4">
           <div>
-            <div className="flex items-baseline gap-2.5">
-              <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
-                03
+            <div className="flex items-center gap-3">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-white font-mono text-xs font-semibold tabular-nums shrink-0">
+                2
               </span>
-              <h3 className="font-display text-base font-semibold text-slate-950">
+              <h3 className="font-display text-base sm:text-lg font-semibold text-slate-950">
                 {t.locationSectionTitle}
               </h3>
             </div>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+            <p className="mt-1.5 ms-10 text-xs sm:text-sm text-slate-500">
               {t.locationSectionHint}
             </p>
           </div>
@@ -670,15 +588,15 @@ export function ComplaintForm({
           </div>
         </div>
 
-        {/* SECTION 04: Mandatory Citizen Contact Details */}
+        {/* PART 3: Your Details (Required — stays private on your phone) */}
         <div className="pt-7 border-t border-slate-200/80 space-y-4">
           <div>
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <div className="flex items-baseline gap-2.5">
-                <span className="font-mono text-xs font-semibold tabular-nums text-blue-700 shrink-0">
-                  04
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-slate-900 text-white font-mono text-xs font-semibold tabular-nums shrink-0">
+                  3
                 </span>
-                <h3 className="font-display text-base font-semibold text-slate-950">
+                <h3 className="font-display text-base sm:text-lg font-semibold text-slate-950">
                   {st.citizenDetailsTitle}{" "}
                   <span className="text-red-600" aria-hidden="true">*</span>
                 </h3>
@@ -687,7 +605,7 @@ export function ComplaintForm({
                 * {it.mandatoryTag}
               </span>
             </div>
-            <p className="mt-1 text-xs text-slate-500 flex items-center gap-1.5">
+            <p className="mt-1.5 ms-10 text-xs text-slate-500 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
               <span>{st.citizenDetailsNote}</span>
             </p>
@@ -806,6 +724,81 @@ export function ComplaintForm({
             </div>
           </div>
         </div>
+
+        {/* Quiet Optional Advanced Mode (Hidden by default so beginners are never confused by RTI / Escalation) */}
+        <details
+          open={isSpecialMode}
+          className="pt-5 border-t border-slate-200/80 group"
+        >
+          <summary className="list-none cursor-pointer flex items-center justify-between gap-2 text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-950 select-none">
+            <span>
+              {it.filingModeLabel}:{" "}
+              <strong className="font-semibold text-slate-900">
+                {modes.find((m) => m.id === form.mode)?.label ?? it.modeComplaint}
+              </strong>
+            </span>
+            <ChevronDown
+              className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180 shrink-0"
+              aria-hidden="true"
+            />
+          </summary>
+
+          <div className="mt-3.5 space-y-3">
+            <div
+              role="group"
+              aria-label={it.filingModeLabel}
+              className="grid grid-cols-1 sm:grid-cols-3 gap-2"
+            >
+              {modes.map((m) => {
+                const selected = form.mode === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onChange("mode", m.id)}
+                    className={`px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-xl border text-start transition-colors min-h-[44px] ${
+                      selected
+                        ? "bg-slate-900 text-white border-slate-900 font-semibold"
+                        : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950"
+                    }`}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {form.mode === "rti" && (
+              <p className="text-xs text-blue-900 bg-blue-50/70 border border-blue-200/80 rounded-xl px-4 py-3 leading-relaxed">
+                {it.modeRtiHint}
+              </p>
+            )}
+
+            {form.mode === "escalation" && (
+              <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2.5">
+                <p className="text-xs text-amber-950 leading-relaxed">{it.modeEscalationHint}</p>
+                <div>
+                  <label
+                    htmlFor="previous-ticket-input"
+                    className="block text-xs font-semibold text-slate-800"
+                  >
+                    {it.previousTicketIdLabel}
+                  </label>
+                  <input
+                    id="previous-ticket-input"
+                    type="text"
+                    value={form.previousTicketId}
+                    onChange={(e) => onChange("previousTicketId", e.target.value)}
+                    disabled={busy}
+                    placeholder={it.previousTicketIdPlaceholder}
+                    className="mt-1 w-full h-11 px-3.5 text-sm font-mono text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </details>
 
         {errorMessage && (
           <div

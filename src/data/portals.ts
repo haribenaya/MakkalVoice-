@@ -176,34 +176,83 @@ export function buildFallbackDocuments(
 }
 
 function buildFallbackButtonGuide(uiLanguage: string) {
-  if (uiLanguage === "Tamil") {
-    return [
+  const byLang: Record<string, Array<{ englishLabel: string; localMeaning: string }>> = {
+    Tamil: [
       { englishLabel: "Register / Lodge Grievance", localMeaning: "புதிய புகாரைப் பதிவு செய்யவும்" },
       { englishLabel: "Mobile OTP Verification", localMeaning: "உங்கள் மொபைல் எண்ணுக்கு வரும் OTP-ஐ உள்ளிடவும்" },
       { englishLabel: "Select Department / Category", localMeaning: "சம்பந்தப்பட்ட அரசு துறையைத் தேர்ந்தெடுக்கவும்" },
       { englishLabel: "Grievance Description", localMeaning: "இங்கே நகலெடுத்த புகார் கடிதத்தை ஒட்டவும் (Paste)" },
       { englishLabel: "Upload Attachment / Document", localMeaning: "புகைப்படம் அல்லது பில் கோப்பை இணைக்கவும்" },
       { englishLabel: "Submit", localMeaning: "புகாரை இறுதியாகச் சமர்ப்பிக்கவும்" },
-    ];
-  }
-  if (uiLanguage === "Hindi") {
-    return [
+    ],
+    Hindi: [
       { englishLabel: "Register / Lodge Grievance", localMeaning: "नई शिकायत दर्ज करें" },
       { englishLabel: "Mobile OTP Verification", localMeaning: "अपने मोबाइल पर आया OTP दर्ज करें" },
       { englishLabel: "Select Department / Category", localMeaning: "संबंधित सरकारी विभाग चुनें" },
       { englishLabel: "Grievance Description", localMeaning: "यहाँ कॉपी किया गया शिकायत पत्र पेस्ट करें" },
       { englishLabel: "Upload Attachment / Document", localMeaning: "फ़ोटो या बिल अपलोड करें" },
       { englishLabel: "Submit", localMeaning: "शिकायत अंतिम रूप से जमा करें" },
-    ];
-  }
-  return [
-    { englishLabel: "Register / Lodge Grievance", localMeaning: "Start filing a new complaint on the portal" },
-    { englishLabel: "Mobile OTP Verification", localMeaning: "Enter the one-time code sent to your mobile number" },
-    { englishLabel: "Select Department / Category", localMeaning: "Pick the matching government department" },
-    { englishLabel: "Grievance Description", localMeaning: "Paste your prepared formal complaint letter here" },
-    { englishLabel: "Upload Attachment / Document", localMeaning: "Attach supporting photos, bills, or PDF proof" },
-    { englishLabel: "Submit", localMeaning: "Send your complaint and receive your tracking ID" },
-  ];
+    ],
+    Telugu: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "కొత్త ఫిర్యాదు నమోదు చేయండి" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "మీ మొబైల్‌కు వచ్చిన OTP నమోదు చేయండి" },
+      { englishLabel: "Select Department / Category", localMeaning: "సంబంధిత ప్రభుత్వ శాఖను ఎంచుకోండి" },
+      { englishLabel: "Grievance Description", localMeaning: "కాపీ చేసిన ఫిర్యాదు లేఖను ఇక్కడ పేస్ట్ చేయండి" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ఫోటో లేదా బిల్లు జత చేయండి" },
+      { englishLabel: "Submit", localMeaning: "ఫిర్యాదును సమర్పించండి" },
+    ],
+    Kannada: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "ಹೊಸ ದೂರು ದಾಖಲಿಸಿ" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "ನಿಮ್ಮ ಮೊಬೈಲ್‌ಗೆ ಬಂದ OTP ನಮೂದಿಸಿ" },
+      { englishLabel: "Select Department / Category", localMeaning: "ಸಂಬಂಧಿತ ಸರ್ಕಾರಿ ಇಲಾಖೆ ಆಯ್ಕೆಮಾಡಿ" },
+      { englishLabel: "Grievance Description", localMeaning: "ಕಾಪಿ ಮಾಡಿದ ದೂರು ಪತ್ರವನ್ನು ಇಲ್ಲಿ ಪೇಸ್ಟ್ ಮಾಡಿ" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ಫೋಟೋ ಅಥವಾ ಬಿಲ್ ಅಪ್‌ಲೋಡ್ ಮಾಡಿ" },
+      { englishLabel: "Submit", localMeaning: "ದೂರನ್ನು ಸಲ್ಲಿಸಿ" },
+    ],
+    Malayalam: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "പുതിയ പരാതി രജിസ്റ്റർ ചെയ്യുക" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "മൊബൈലിൽ വന്ന OTP നൽകുക" },
+      { englishLabel: "Select Department / Category", localMeaning: "ബന്ധപ്പെട്ട സർക്കാർ വകുപ്പ് തിരഞ്ഞെടുക്കുക" },
+      { englishLabel: "Grievance Description", localMeaning: "കോപ്പി ചെയ്ത പരാതി കത്ത് ഇവിടെ പേസ്റ്റ് ചെയ്യുക" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ഫോട്ടോ അല്ലെങ്കിൽ ബിൽ അപ്‌ലോഡ് ചെയ്യുക" },
+      { englishLabel: "Submit", localMeaning: "പരാതി സമർപ്പിക്കുക" },
+    ],
+    Bengali: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "নতুন অভিযোগ নথিভুক্ত করুন" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "মোবাইলে আসা OTP লিখুন" },
+      { englishLabel: "Select Department / Category", localMeaning: "সংশ্লিষ্ট সরকারি দপ্তর বেছে নিন" },
+      { englishLabel: "Grievance Description", localMeaning: "কপি করা অভিযোগ পত্রটি এখানে পেস্ট করুন" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ছবি বা বিল আপলোড করুন" },
+      { englishLabel: "Submit", localMeaning: "অভিযোগ জমা দিন" },
+    ],
+    Marathi: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "नवीन तक्रार नोंदवा" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "मोबाईलवर आलेला OTP टाका" },
+      { englishLabel: "Select Department / Category", localMeaning: "संबंधित सरकारी विभाग निवडा" },
+      { englishLabel: "Grievance Description", localMeaning: "कॉपी केलेले तक्रार पत्र येथे पेस्ट करा" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "फोटो किंवा बिल अपलोड करा" },
+      { englishLabel: "Submit", localMeaning: "तक्रार सादर करा" },
+    ],
+    Gujarati: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "નવી ફરિયાદ નોંધાવો" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "મોબાઇલ પર આવેલો OTP દાખલ કરો" },
+      { englishLabel: "Select Department / Category", localMeaning: "સંબંધિત સરકારી વિભાગ પસંદ કરો" },
+      { englishLabel: "Grievance Description", localMeaning: "કોપી કરેલો ફરિયાદ પત્ર અહીં પેસ્ટ કરો" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ફોટો અથવા બિલ અપલોડ કરો" },
+      { englishLabel: "Submit", localMeaning: "ફરિયાદ સબમિટ કરો" },
+    ],
+  };
+
+  return (
+    byLang[uiLanguage] ?? [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "Start filing a new complaint on the portal" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "Enter the one-time code sent to your mobile number" },
+      { englishLabel: "Select Department / Category", localMeaning: "Pick the matching government department" },
+      { englishLabel: "Grievance Description", localMeaning: "Paste your prepared formal complaint letter here" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "Attach supporting photos, bills, or PDF proof" },
+      { englishLabel: "Submit", localMeaning: "Send your complaint and receive your tracking ID" },
+    ]
+  );
 }
 
 export function resolvePortalGuidance(

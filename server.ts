@@ -19,15 +19,22 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT) || 3000;
 const MODEL_NAME = "gemini-3.1-flash-lite";
 const FAST_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
-const DRAFT_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
+const DRAFT_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
 const TRANSCRIBE_MODELS = [
   "gemini-3.5-transcribe",
   "gemini-3.1-flash-lite",
   "gemini-4-hydrogen",
 ] as const;
-const REQUEST_TIMEOUT_MS = 22_000;
-const ATTEMPT_TIMEOUT_MS = 14_000;
+const REQUEST_TIMEOUT_MS = 18_000;
+const ATTEMPT_TIMEOUT_MS = 10_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
+
+function thinkingConfigForModel(model: string) {
+  if (model.includes("flash-lite")) {
+    return { thinkingLevel: ThinkingLevel.MINIMAL };
+  }
+  return { thinkingLevel: ThinkingLevel.LOW };
+}
 
 const VALID_CATEGORIES: ComplaintCategory[] = [
   "Civic Issues",
@@ -269,24 +276,34 @@ async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
   attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
+  rounds = 2,
 ): Promise<T> {
   let lastError: unknown;
-  for (let i = 0; i < models.length; i += 1) {
-    const model = models[i];
+  const sequence: string[] = [];
+  for (let r = 0; r < rounds; r += 1) {
+    for (const m of models) sequence.push(m);
+  }
+
+  for (let i = 0; i < sequence.length; i += 1) {
+    const model = sequence[i];
     try {
       return await withTimeout(runForModel(model), attemptTimeoutMs);
     } catch (err) {
       lastError = err;
-      console.warn(`[MakkalVoice AI] model "${model}" attempt failed:`, (err as Error)?.message?.slice(0, 180));
-      if (!isRetryableGeminiError(err) && i < models.length - 1) {
-        // Still try fallback model if format/model mismatch occurs on a specialized model
-        const msg = String((err as Error)?.message ?? "");
-        if (!/INVALID_ARGUMENT|unsupported|not found/i.test(msg)) {
-          throw err;
-        }
+      const errMsg = String((err as Error)?.message ?? "");
+      console.warn(
+        `[MakkalVoice AI] attempt ${i + 1}/${sequence.length} (${model}) failed:`,
+        errMsg.slice(0, 180),
+      );
+      if (
+        !isRetryableGeminiError(err) &&
+        !/INVALID_ARGUMENT|unsupported|not found/i.test(errMsg)
+      ) {
+        throw err;
       }
-      if (i < models.length - 1) {
-        await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+      if (i < sequence.length - 1) {
+        const delayMs = Math.min(2400, 450 * Math.pow(1.6, i));
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
   }
@@ -562,7 +579,7 @@ async function startServer() {
               ],
             },
             config: {
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              thinkingConfig: thinkingConfigForModel(model),
               responseMimeType: "application/json",
               responseSchema: {
                 type: Type.OBJECT,
@@ -625,14 +642,69 @@ async function startServer() {
         return;
       }
 
-      const ai = getAiClient();
       const normalizedMime =
         mimeType === "audio/x-m4a" || mimeType === "audio/m4a" ? "audio/mp4" : mimeType;
 
+      // Optional Whisper / WhisperFlow-compatible server endpoint when configured via server env vars
+      const whisperApiKey = process.env.WHISPER_API_KEY?.trim() || "";
+      const whisperApiUrl =
+        process.env.WHISPER_API_URL?.trim() ||
+        "https://api.groq.com/openai/v1/audio/transcriptions";
+      const whisperModel = process.env.WHISPER_MODEL?.trim() || "whisper-large-v3-turbo";
+
+      if (whisperApiKey) {
+        try {
+          const audioBuffer = Buffer.from(audioBase64, "base64");
+          const ext = normalizedMime.includes("mp4")
+            ? "m4a"
+            : normalizedMime.includes("ogg")
+              ? "ogg"
+              : normalizedMime.includes("wav")
+                ? "wav"
+                : "webm";
+          const formData = new FormData();
+          formData.append(
+            "file",
+            new Blob([audioBuffer], { type: normalizedMime }),
+            `voice.${ext}`,
+          );
+          formData.append("model", whisperModel);
+          formData.append(
+            "prompt",
+            `Indian citizen grievance dictation in ${language}. Keep local street names, districts, and numbers accurate with clean punctuation.`,
+          );
+
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 14_000);
+          try {
+            const wRes = await fetch(whisperApiUrl, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${whisperApiKey}` },
+              body: formData,
+              signal: controller.signal,
+            });
+            if (wRes.ok) {
+              const wJson = (await wRes.json()) as { text?: string };
+              const wText = cleanMultilineText(wJson.text, 2500);
+              if (wText) {
+                res.json({ transcript: wText, engine: "whisper" });
+                return;
+              }
+            }
+          } finally {
+            clearTimeout(timer);
+          }
+        } catch (wErr) {
+          console.warn("[/api/transcribe-audio] Whisper endpoint fallback to Gemini:", (wErr as Error)?.message);
+        }
+      }
+
+      const ai = getAiClient();
+
       const dictationPrompt = [
-        `Transcribe this Indian citizen voice recording in ${language} (Smart Flow Dictation style).`,
-        `Write clean, naturally punctuated sentences in ${language} script, keeping any spoken English words, street names, or digits accurate.`,
-        "Automatically remove filler sounds (um, uh, ahh, stammering) and false starts while keeping 100% of the speaker's true meaning and facts.",
+        `Transcribe this Indian citizen voice recording in ${language} (high-accuracy Indian dialect & Smart Flow dictation).`,
+        `Write clean, naturally punctuated sentences in ${language} script, accurately preserving Indian regional dialects, local street/area names, spoken English terms, and digits.`,
+        "Automatically remove filler sounds (um, uh, ahh, stammering) and false starts while preserving 100% of the speaker's true facts.",
         "Return ONLY the cleaned transcript text with no labels, quotes, or commentary. If there is only silence or noise with no intelligible speech, return an empty string.",
       ].join("\n");
 
@@ -652,20 +724,20 @@ async function startServer() {
                 {
                   text:
                     model === "gemini-3.5-transcribe"
-                      ? `Transcribe this audio cleanly in ${language} with natural punctuation and no filler words.`
+                      ? `Transcribe this Indian speech recording accurately in ${language} (preserve regional dialect meaning, local place names, and numbers with clean punctuation and no filler words).`
                       : dictationPrompt,
                 },
               ],
             },
             ...(model === "gemini-3.5-transcribe"
               ? {}
-              : { config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } }),
+              : { config: { thinkingConfig: thinkingConfigForModel(model) } }),
           }),
         ATTEMPT_TIMEOUT_MS,
       );
 
       const transcript = cleanMultilineText(response.text, 2500);
-      res.json({ transcript });
+      res.json({ transcript, engine: "gemini-transcribe" });
     } catch (error) {
       console.error("[/api/transcribe-audio] error:", error);
       const mapped = mapGeminiError(error);
@@ -705,7 +777,7 @@ async function startServer() {
             config: {
               systemInstruction:
                 "Extract ONLY what is explicitly stated or strongly implied by the citizen's spoken problem: category (one of the allowed categories), state (exact match from allowed Indian states/UTs list if mentioned or unambiguously implied by a city like Chennai->Tamil Nadu, Bengaluru->Karnataka, Mumbai->Maharashtra, Pune->Maharashtra, Hyderabad->Telangana, Delhi->Delhi (NCT), Kolkata->West Bengal; otherwise empty string), district (English name if mentioned/implied, else empty), town (city/locality if mentioned, else empty), street (street/landmark if mentioned, else empty). Never fabricate locations not mentioned.",
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              thinkingConfig: thinkingConfigForModel(model),
               responseMimeType: "application/json",
               responseSchema: {
                 type: Type.OBJECT,
@@ -833,7 +905,7 @@ async function startServer() {
               contents: buildPrompt(extraAvoid),
               config: {
                 systemInstruction,
-                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+                thinkingConfig: thinkingConfigForModel(model),
                 responseMimeType: "application/json",
                 responseSchema: {
                   type: Type.OBJECT,
@@ -1000,7 +1072,7 @@ async function startServer() {
             contents: prompt,
             config: {
               systemInstruction,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              thinkingConfig: thinkingConfigForModel(model),
               responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -1248,7 +1320,7 @@ async function startServer() {
               "Use literal placeholders [COMPLAINANT_NAME] and [CONTACT_DETAILS] in the signature block.",
               `Provide suggestedAuthority, whyThisPortal, portalLanguageTip, and 4 concise summaryPoints in ${uiLanguage}.`,
             ].join("\n"),
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            thinkingConfig: thinkingConfigForModel(model),
             responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
@@ -1410,7 +1482,7 @@ async function startServer() {
             history: sanitizedHistory,
             config: {
               systemInstruction,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              thinkingConfig: thinkingConfigForModel(model),
             },
           });
           return chat.sendMessage({ message });

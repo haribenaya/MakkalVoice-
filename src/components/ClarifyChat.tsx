@@ -40,6 +40,7 @@ interface ClarifyChatProps {
   onToggleAutoRead: () => void;
   onSpeakMessage: (id: string, text: string) => void;
   onStopSpeaking: () => void;
+  onRetryQuestion?: () => void;
   errorMessage: string | null;
 }
 
@@ -70,6 +71,7 @@ export function ClarifyChat({
   onToggleAutoRead,
   onSpeakMessage,
   onStopSpeaking,
+  onRetryQuestion,
   errorMessage,
 }: ClarifyChatProps) {
   const scrollEndRef = useRef<HTMLDivElement | null>(null);
@@ -234,9 +236,29 @@ export function ClarifyChat({
       {errorMessage && (
         <div
           role="alert"
-          className="mt-4 px-4 py-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-lg"
+          className="mt-4 px-4 py-3 text-sm text-red-800 bg-red-50 border border-red-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
-          {errorMessage}
+          <span>{errorMessage}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            {onRetryQuestion && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={onRetryQuestion}
+                className="px-3 py-1.5 text-xs font-semibold text-red-900 bg-white border border-red-300 hover:bg-red-100 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                {t.regenerate}
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onSkipToDraft}
+              className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+            >
+              {t.generateDraftNow}
+            </button>
+          </div>
         </div>
       )}
 

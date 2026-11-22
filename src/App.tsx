@@ -1243,6 +1243,7 @@ export default function App() {
               onToggleAutoRead={() => setAutoReadAloud((v) => !v)}
               onSpeakMessage={handleSpeakMessage}
               onStopSpeaking={handleStopSpeaking}
+              onRetryQuestion={() => void askNextQuestion(answers, askedQuestions, messages)}
               errorMessage={errorMessage}
             />
           )}

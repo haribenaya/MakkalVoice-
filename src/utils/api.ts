@@ -124,6 +124,18 @@ export function requestEvidenceScan(
   });
 }
 
+export function requestAudioTranscription(
+  audioBase64: string,
+  mimeType: string,
+  language: string,
+): Promise<{ transcript: string }> {
+  return postApiJSON<{ transcript: string }>("transcribe-audio", {
+    audioBase64,
+    mimeType,
+    language,
+  });
+}
+
 export function requestVoiceExtraction(
   complaint: string,
   language: string,

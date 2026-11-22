@@ -452,14 +452,14 @@ export function DraftReview({
             />
           </div>
 
-          {/* Primary Actions Row: Copy, A4 PDF, Print Official Letter, Download .txt, Save to Tracker, Regenerate */}
+          {/* Primary Actions: 3 Clean Equal Actions */}
           <div className="space-y-3 pt-2">
-            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <button
                 type="button"
                 onClick={handleCopy}
                 disabled={busy || !draftText.trim()}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap min-h-[48px] disabled:opacity-50"
               >
                 {copied ? (
                   <>
@@ -478,7 +478,7 @@ export function DraftReview({
                 type="button"
                 onClick={handleDownloadPdf}
                 disabled={busy || !draftText.trim()}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors whitespace-nowrap min-h-[48px] disabled:opacity-50"
               >
                 <FileDown className="w-4 h-4" aria-hidden="true" />
                 {it.downloadOfficialPdf}
@@ -488,30 +488,23 @@ export function DraftReview({
                 type="button"
                 onClick={handlePrintLetter}
                 disabled={busy || !draftText.trim()}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-900 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap min-h-[48px] disabled:opacity-50"
               >
                 <Printer className="w-4 h-4" aria-hidden="true" />
                 {it.printOfficialLetter}
               </button>
+            </div>
 
-              <button
-                type="button"
-                onClick={handleDownloadTxt}
-                disabled={busy || !draftText.trim()}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
-              >
-                <Download className="w-4 h-4" aria-hidden="true" />
-                {t.downloadTxt}
-              </button>
-
+            {/* Quiet Secondary Tools & Share Strip */}
+            <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
               <button
                 type="button"
                 onClick={onSaveToTracker}
                 disabled={busy || !draftText.trim()}
-                className={`inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-xl border transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50 ${
+                className={`inline-flex items-center gap-1.5 font-semibold transition-colors whitespace-nowrap disabled:opacity-50 ${
                   isSavedToTracker
-                    ? "bg-emerald-50 text-emerald-900 border-emerald-300"
-                    : "bg-white text-slate-800 border-slate-300 hover:bg-slate-50"
+                    ? "text-emerald-800"
+                    : "text-blue-700 hover:text-blue-900"
                 }`}
               >
                 {isSavedToTracker ? (
@@ -521,56 +514,74 @@ export function DraftReview({
                   </>
                 ) : (
                   <>
-                    <BookmarkPlus className="w-4 h-4 text-blue-700" aria-hidden="true" />
+                    <BookmarkPlus className="w-4 h-4" aria-hidden="true" />
                     {it.saveToTrackerBtn}
                   </>
                 )}
               </button>
 
+              <span aria-hidden="true" className="text-slate-300">·</span>
+
               <button
                 type="button"
-                onClick={() => onRegenerate(draftLanguage)}
-                disabled={busy}
-                className="inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[46px] disabled:opacity-50"
+                onClick={handleDownloadTxt}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap disabled:opacity-50"
               >
-                <RefreshCw
-                  className={`w-4 h-4 ${busy ? "animate-spin" : ""}`}
-                  aria-hidden="true"
-                />
-                {busy ? t.regenerating : t.regenerate}
+                <Download className="w-3.5 h-3.5" aria-hidden="true" />
+                {t.downloadTxt}
               </button>
-            </div>
 
-            {/* Family Share Row (WhatsApp / Email / Native Share — no window.open) */}
-            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+              <span aria-hidden="true" className="text-slate-300">·</span>
+
               <a
                 href={whatsAppHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-emerald-900 bg-emerald-50/80 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 font-medium text-emerald-800 hover:text-emerald-950 transition-colors whitespace-nowrap"
               >
                 <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 {it.shareWhatsApp}
               </a>
 
+              <span aria-hidden="true" className="text-slate-300">·</span>
+
               <a
                 href={mailtoHref}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap"
               >
                 <Mail className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
                 {it.shareEmail}
               </a>
 
               {canNativeShare && (
-                <button
-                  type="button"
-                  onClick={() => void handleNativeShare()}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 font-medium text-blue-800 bg-blue-50/70 hover:bg-blue-100 border border-blue-200/80 rounded-xl transition-colors whitespace-nowrap"
-                >
-                  <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  {it.sharePacketNative}
-                </button>
+                <>
+                  <span aria-hidden="true" className="text-slate-300">·</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleNativeShare()}
+                    className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap"
+                  >
+                    <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {it.sharePacketNative}
+                  </button>
+                </>
               )}
+
+              <span aria-hidden="true" className="text-slate-300">·</span>
+
+              <button
+                type="button"
+                onClick={() => onRegenerate(draftLanguage)}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 font-medium text-slate-600 hover:text-slate-950 transition-colors whitespace-nowrap disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${busy ? "animate-spin" : ""}`}
+                  aria-hidden="true"
+                />
+                {busy ? t.regenerating : t.regenerate}
+              </button>
             </div>
           </div>
         </div>
@@ -825,6 +836,7 @@ export function DraftReview({
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
               <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
+                <span className="font-mono text-xs font-semibold text-blue-700">01</span>
                 <FileCheck2 className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
                 {st.documentsTitle}
               </h3>
@@ -904,7 +916,8 @@ export function DraftReview({
         <div className="mt-6 pb-6 border-b border-slate-200 grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* 1-Tap Copy Form Fields for English Government Portals */}
           <div className="lg:col-span-7">
-            <h3 className="text-sm sm:text-base font-semibold text-slate-950">
+            <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
+              <span className="font-mono text-xs font-semibold text-blue-700">03</span>
               {st.portalFormSheetTitle}
             </h3>
             <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">
@@ -989,7 +1002,8 @@ export function DraftReview({
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
           {portalGuidance.filingSteps && portalGuidance.filingSteps.length > 0 && (
             <div>
-              <h3 className="text-sm font-semibold text-slate-900">
+              <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
+                <span className="font-mono text-xs font-semibold text-blue-700">04</span>
                 {t.portalStepsTitle}
               </h3>
               <ol className="mt-3 space-y-2.5 text-sm text-slate-700">

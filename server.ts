@@ -503,6 +503,67 @@ async function startServer() {
     }
   });
 
+  // Universal Voice-to-Text Transcription using Gemini Multimodal Audio (works on every browser & mobile device)
+  app.post("/api/transcribe-audio", async (req, res) => {
+    try {
+      const body = (req.body ?? {}) as {
+        audioBase64?: string;
+        mimeType?: string;
+        language?: string;
+      };
+      const audioBase64 = typeof body.audioBase64 === "string" ? body.audioBase64.trim() : "";
+      const rawMime = cleanText(body.mimeType, 60) || "audio/webm";
+      const mimeType = rawMime.split(";")[0].trim().toLowerCase() || "audio/webm";
+      const language = cleanText(body.language, 40) || "English";
+
+      if (!audioBase64 || audioBase64.length < 120) {
+        res.status(400).json({ error: "No audio was captured. Please speak clearly, then tap Stop." });
+        return;
+      }
+
+      if (!/^audio\/(webm|mp4|mpeg|mp3|ogg|wav|aac|x-m4a|m4a)$/i.test(mimeType)) {
+        res.status(400).json({ error: "Unsupported audio recording format." });
+        return;
+      }
+
+      const ai = getAiClient();
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: MODEL_NAME,
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: mimeType === "audio/x-m4a" || mimeType === "audio/m4a" ? "audio/mp4" : mimeType,
+                  data: audioBase64,
+                },
+              },
+              {
+                text: [
+                  `Listen carefully to this citizen voice recording from India. Their selected language is: ${language}.`,
+                  `Transcribe ONLY the exact words spoken into clean, natural ${language} script (preserve English words or numbers if spoken).`,
+                  "Return ONLY the raw spoken transcript text with no labels, no quotes, and no commentary.",
+                  "If there is only silence or background noise with no intelligible speech, return an empty string.",
+                ].join("\n"),
+              },
+            ],
+          },
+          config: {
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+          },
+        }),
+        REQUEST_TIMEOUT_MS,
+      );
+
+      const transcript = cleanMultilineText(response.text, 2500);
+      res.json({ transcript });
+    } catch (error) {
+      console.error("[/api/transcribe-audio] error:", error);
+      const mapped = mapGeminiError(error);
+      res.status(mapped.status).json({ error: mapped.message });
+    }
+  });
+
   // Voice-First Auto-Extraction: detect category and location details directly from spoken text
   app.post("/api/voice-understand", async (req, res) => {
     try {

@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   ArrowLeft,
   FileText,
+  Loader2,
   Mic,
   MicOff,
   Send,
@@ -26,7 +27,9 @@ interface ClarifyChatProps {
   onBackToForm: () => void;
   busy: boolean;
   isListening: boolean;
-  interimTranscript: string;
+  isTranscribing: boolean;
+  voiceAudioLevel: number;
+  voiceElapsedSeconds: number;
   speechSupported: boolean;
   onToggleVoice: () => void;
   isSpeakingId: string | null;
@@ -52,7 +55,9 @@ export function ClarifyChat({
   onBackToForm,
   busy,
   isListening,
-  interimTranscript,
+  isTranscribing,
+  voiceAudioLevel,
+  voiceElapsedSeconds,
   speechSupported,
   onToggleVoice,
   isSpeakingId,
@@ -68,6 +73,8 @@ export function ClarifyChat({
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages, busy]);
+
+  const elapsedLabel = `${Math.floor(voiceElapsedSeconds / 60)}:${voiceElapsedSeconds % 60 < 10 ? "0" : ""}${voiceElapsedSeconds % 60}`;
 
   return (
     <section
@@ -249,17 +256,24 @@ export function ClarifyChat({
             <button
               type="button"
               onClick={onToggleVoice}
-              disabled={busy}
+              disabled={busy || isTranscribing}
               className={`w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px] ${
                 isListening
                   ? "bg-red-600 text-white hover:bg-red-700"
                   : "bg-blue-700 text-white hover:bg-blue-800 disabled:opacity-50"
               }`}
             >
-              {isListening ? (
+              {isTranscribing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                  <span>Converting voice...</span>
+                </>
+              ) : isListening ? (
                 <>
                   <MicOff className="w-4 h-4" aria-hidden="true" />
-                  {t.stopListening}
+                  <span>
+                    {t.stopListening} ({elapsedLabel})
+                  </span>
                 </>
               ) : (
                 <>
@@ -275,9 +289,18 @@ export function ClarifyChat({
           <div
             role="status"
             aria-live="polite"
-            className="px-4 py-2.5 text-sm bg-red-50 text-red-900 border border-red-200 rounded-lg"
+            className="px-4 py-3 text-sm bg-red-50 text-red-900 border border-red-200 rounded-lg space-y-2"
           >
-            {interimTranscript ? `“${interimTranscript}”` : t.listeningNow}
+            <div className="flex items-center justify-between gap-2 text-xs font-medium">
+              <span>{t.listeningNow}</span>
+              <span className="font-mono tabular-nums">{elapsedLabel}</span>
+            </div>
+            <div className="w-full h-2 bg-red-100 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-red-600 transition-all duration-75"
+                style={{ width: `${Math.max(8, voiceAudioLevel)}%` }}
+              />
+            </div>
           </div>
         )}
 

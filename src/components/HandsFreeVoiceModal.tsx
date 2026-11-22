@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, Mic, MicOff, Volume2, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Check, Loader2, Mic, MicOff, Volume2, X } from "lucide-react";
 import { LANGUAGE_LOCALE_MAP } from "../data/languages";
 import type { InnovationStrings } from "../data/innovationTranslations";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 import {
-  getSpeechRecognitionConstructor,
-  isSpeechRecognitionSupported,
   isSpeechSynthesisSupported,
-  mapSpeechError,
   speakText,
   stopSpeakingText,
-  type SpeechRecognitionLike,
 } from "../utils/speech";
 
 interface HandsFreeVoiceModalProps {
@@ -23,6 +20,12 @@ interface HandsFreeVoiceModalProps {
 
 type VoiceStage = "describe" | "location" | "ready";
 
+function formatElapsed(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s < 10 ? "0" : ""}${s}`;
+}
+
 export function HandsFreeVoiceModal({
   open,
   onClose,
@@ -34,27 +37,22 @@ export function HandsFreeVoiceModal({
   const [stage, setStage] = useState<VoiceStage>("describe");
   const [spokenProblem, setSpokenProblem] = useState("");
   const [spokenLocation, setSpokenLocation] = useState("");
-  const [listening, setListening] = useState(false);
-  const [interim, setInterim] = useState("");
   const [errorText, setErrorText] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const locale = LANGUAGE_LOCALE_MAP[language] ?? "en-IN";
-  const speechRecSupported = isSpeechRecognitionSupported();
   const ttsSupported = isSpeechSynthesisSupported();
 
-  const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        // ignore
+  const recorder = useVoiceRecorder({
+    language,
+    onTranscript: (text) => {
+      if (stage === "describe") {
+        setSpokenProblem((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
+      } else if (stage === "location") {
+        setSpokenLocation((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
       }
-      recognitionRef.current = null;
-    }
-    setListening(false);
-    setInterim("");
-  }, []);
+    },
+    onError: (msg) => setErrorText(msg),
+  });
 
   const readPrompt = useCallback(
     (text: string) => {
@@ -67,7 +65,7 @@ export function HandsFreeVoiceModal({
 
   useEffect(() => {
     if (!open) {
-      stopListening();
+      recorder.cancelRecording();
       stopSpeakingText();
       return;
     }
@@ -77,10 +75,11 @@ export function HandsFreeVoiceModal({
     setErrorText(null);
     readPrompt(it.handsFreePromptDescribe);
     return () => {
-      stopListening();
+      recorder.cancelRecording();
       stopSpeakingText();
     };
-  }, [open, initialComplaint, it.handsFreePromptDescribe, readPrompt, stopListening]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialComplaint, it.handsFreePromptDescribe]);
 
   if (!open) return null;
 
@@ -92,75 +91,17 @@ export function HandsFreeVoiceModal({
         : it.handsFreePromptReady;
 
   const toggleListen = () => {
-    if (listening) {
-      stopListening();
+    setErrorText(null);
+    if (recorder.isRecording) {
+      recorder.stopRecording();
       return;
     }
     stopSpeakingText();
-    setErrorText(null);
-
-    const Ctor = getSpeechRecognitionConstructor();
-    if (!Ctor) {
-      setErrorText("Voice input is not supported in this browser.");
-      return;
-    }
-
-    try {
-      const rec = new Ctor();
-      rec.lang = locale;
-      rec.continuous = true;
-      rec.interimResults = true;
-
-      rec.onstart = () => {
-        setListening(true);
-        setInterim("");
-      };
-
-      rec.onresult = (event) => {
-        let finalText = "";
-        let interimText = "";
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          const chunk = event.results[i][0]?.transcript ?? "";
-          if (event.results[i].isFinal) finalText += chunk;
-          else interimText += chunk;
-        }
-        setInterim(interimText.trim());
-        if (finalText.trim()) {
-          if (stage === "describe") {
-            setSpokenProblem((prev) =>
-              prev.trim() ? `${prev.trim()} ${finalText.trim()}` : finalText.trim(),
-            );
-          } else if (stage === "location") {
-            setSpokenLocation((prev) =>
-              prev.trim() ? `${prev.trim()} ${finalText.trim()}` : finalText.trim(),
-            );
-          }
-        }
-      };
-
-      rec.onerror = (e) => {
-        const mapped = mapSpeechError(e.error);
-        if (mapped) setErrorText(mapped);
-        setListening(false);
-        setInterim("");
-      };
-
-      rec.onend = () => {
-        setListening(false);
-        setInterim("");
-        recognitionRef.current = null;
-      };
-
-      recognitionRef.current = rec;
-      rec.start();
-    } catch {
-      setListening(false);
-      setErrorText("Could not start microphone. Please try again.");
-    }
+    void recorder.startRecording();
   };
 
   const handleAdvance = () => {
-    stopListening();
+    if (recorder.isRecording) recorder.stopRecording();
     if (stage === "describe") {
       setStage("location");
       readPrompt(it.handsFreePromptLocation);
@@ -197,7 +138,7 @@ export function HandsFreeVoiceModal({
           <button
             type="button"
             onClick={() => {
-              stopListening();
+              recorder.cancelRecording();
               stopSpeakingText();
               onClose();
             }}
@@ -225,23 +166,30 @@ export function HandsFreeVoiceModal({
           )}
         </div>
 
-        {/* Big Accessible Tap-to-Speak Control */}
+        {/* Big Accessible Tap-to-Speak Control with Live Voice Level Meter */}
         {stage !== "ready" && (
           <div className="flex flex-col items-center gap-3 py-2">
             <button
               type="button"
-              disabled={!speechRecSupported}
+              disabled={!recorder.isSupported || recorder.isTranscribing}
               onClick={toggleListen}
               className={`w-full py-5 px-6 rounded-2xl text-lg font-semibold text-white flex items-center justify-center gap-3 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 ${
-                listening
+                recorder.isRecording
                   ? "bg-red-600 hover:bg-red-700"
                   : "bg-blue-700 hover:bg-blue-800"
               }`}
             >
-              {listening ? (
+              {recorder.isTranscribing ? (
+                <>
+                  <Loader2 className="w-6 h-6 animate-spin shrink-0" aria-hidden="true" />
+                  <span>Converting voice to text...</span>
+                </>
+              ) : recorder.isRecording ? (
                 <>
                   <MicOff className="w-6 h-6 shrink-0" aria-hidden="true" />
-                  <span>{it.handsFreeListening}</span>
+                  <span>
+                    {it.handsFreeListening} ({formatElapsed(recorder.elapsedSeconds)})
+                  </span>
                 </>
               ) : (
                 <>
@@ -251,8 +199,15 @@ export function HandsFreeVoiceModal({
               )}
             </button>
 
-            {interim && (
-              <p className="text-sm text-blue-800 italic text-center">“{interim}”</p>
+            {recorder.isRecording && (
+              <div className="w-full space-y-1.5">
+                <div className="w-full h-2 bg-red-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-red-600 transition-all duration-75"
+                    style={{ width: `${Math.max(8, recorder.audioLevel)}%` }}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -283,7 +238,7 @@ export function HandsFreeVoiceModal({
           <button
             type="button"
             onClick={() => {
-              stopListening();
+              recorder.cancelRecording();
               stopSpeakingText();
               onClose();
             }}
@@ -294,7 +249,10 @@ export function HandsFreeVoiceModal({
 
           <button
             type="button"
-            disabled={stage === "describe" && spokenProblem.trim().length < 4}
+            disabled={
+              recorder.isTranscribing ||
+              (stage === "describe" && spokenProblem.trim().length < 4)
+            }
             onClick={handleAdvance}
             className="inline-flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50"
           >

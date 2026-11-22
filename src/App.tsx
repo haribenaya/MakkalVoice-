@@ -50,14 +50,11 @@ import {
   resolveEffectiveDistrict,
 } from "./utils/api";
 import { compressImageForPortal } from "./utils/mediaTools";
+import { useVoiceRecorder } from "./hooks/useVoiceRecorder";
 import {
-  getSpeechRecognitionConstructor,
-  isSpeechRecognitionSupported,
   isSpeechSynthesisSupported,
-  mapSpeechError,
   speakText,
   stopSpeakingText,
-  type SpeechRecognitionLike,
 } from "./utils/speech";
 import {
   clearAutosavedForm,
@@ -161,16 +158,39 @@ export default function App() {
 
   // Voice input & speech output state
   const [voiceTarget, setVoiceTarget] = useState<"complaint" | "answer" | null>(null);
-  const [interimTranscript, setInterimTranscript] = useState("");
+  const voiceTargetRef = useRef<"complaint" | "answer" | null>(null);
+  voiceTargetRef.current = voiceTarget;
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [isReadingGuide, setIsReadingGuide] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const t = useMemo(() => getUiStrings(form.language), [form.language]);
   const st = useMemo(() => getSubmissionStrings(form.language), [form.language]);
   const it = useMemo(() => getInnovationStrings(form.language), [form.language]);
-  const speechSupported = useMemo(() => isSpeechRecognitionSupported(), []);
   const speechOutputSupported = useMemo(() => isSpeechSynthesisSupported(), []);
+
+  const voiceRecorder = useVoiceRecorder({
+    language: form.language,
+    onTranscript: (spokenText) => {
+      if (voiceTargetRef.current === "answer") {
+        setAnswerInput((prev) => (prev.trim() ? `${prev.trim()} ${spokenText}` : spokenText));
+      } else {
+        setForm((prev) => ({
+          ...prev,
+          complaint: prev.complaint.trim()
+            ? `${prev.complaint.trim()} ${spokenText}`
+            : spokenText,
+        }));
+        setFieldErrors((prev) => (prev.complaint ? { ...prev, complaint: false } : prev));
+      }
+      setVoiceTarget(null);
+    },
+    onError: (msg) => {
+      setErrorMessage(msg);
+      setVoiceTarget(null);
+    },
+  });
+
+  const speechSupported = voiceRecorder.isSupported;
 
   // Listen for Google Maps Platform Demo Key Quota events (Tier 1 + Tier 2)
   useEffect(() => {
@@ -208,17 +228,9 @@ export default function App() {
   }, [form.language, t.isRtl]);
 
   const stopVoiceInput = useCallback(() => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        // Ignore already stopped recognition
-      }
-      recognitionRef.current = null;
-    }
+    voiceRecorder.cancelRecording();
     setVoiceTarget(null);
-    setInterimTranscript("");
-  }, []);
+  }, [voiceRecorder]);
 
   const handleStopSpeaking = useCallback(() => {
     stopSpeakingText();
@@ -229,13 +241,6 @@ export default function App() {
   // Cleanup browser audio handles on unmount
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          // ignore
-        }
-      }
       stopSpeakingText();
     };
   }, []);
@@ -447,82 +452,20 @@ export default function App() {
   };
 
   const startVoiceInput = (target: "complaint" | "answer") => {
-    if (voiceTarget === target) {
-      stopVoiceInput();
-      return;
+    if (voiceRecorder.isRecording) {
+      if (voiceTarget === target) {
+        voiceRecorder.stopRecording();
+        return;
+      }
+      voiceRecorder.cancelRecording();
     }
+    if (voiceRecorder.isTranscribing) return;
 
-    stopVoiceInput();
     handleStopSpeaking();
     setErrorMessage(null);
-
-    const SpeechCtor = getSpeechRecognitionConstructor();
-    if (!SpeechCtor) {
-      setErrorMessage(t.voiceUnsupported);
-      return;
-    }
-
-    try {
-      const recognition = new SpeechCtor();
-      recognition.lang = LANGUAGE_LOCALE_MAP[form.language] ?? "en-IN";
-      recognition.continuous = true;
-      recognition.interimResults = true;
-
-      recognition.onstart = () => {
-        setVoiceTarget(target);
-        setInterimTranscript("");
-      };
-
-      recognition.onresult = (event) => {
-        let finalChunk = "";
-        let interimChunk = "";
-
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          const transcript = event.results[i][0]?.transcript ?? "";
-          if (event.results[i].isFinal) {
-            finalChunk += transcript;
-          } else {
-            interimChunk += transcript;
-          }
-        }
-
-        setInterimTranscript(interimChunk.trim());
-
-        if (finalChunk.trim()) {
-          if (target === "complaint") {
-            setForm((prev) => ({
-              ...prev,
-              complaint: prev.complaint.trim()
-                ? `${prev.complaint.trim()} ${finalChunk.trim()}`
-                : finalChunk.trim(),
-            }));
-          } else {
-            setAnswerInput((prev) =>
-              prev.trim() ? `${prev.trim()} ${finalChunk.trim()}` : finalChunk.trim(),
-            );
-          }
-        }
-      };
-
-      recognition.onerror = (event) => {
-        const msg = mapSpeechError(event.error);
-        if (msg) setErrorMessage(msg);
-        setVoiceTarget(null);
-        setInterimTranscript("");
-      };
-
-      recognition.onend = () => {
-        setVoiceTarget(null);
-        setInterimTranscript("");
-        recognitionRef.current = null;
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
-      setVoiceTarget(null);
-      setErrorMessage("Voice input failed to start. Please try again or type directly.");
-    }
+    setVoiceTarget(target);
+    voiceTargetRef.current = target;
+    void voiceRecorder.startRecording();
   };
 
   const handleSpeakMessage = useCallback(
@@ -959,12 +902,10 @@ export default function App() {
 
   const handleHeroStartSpeaking = () => {
     setStep("describe");
-    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
     if (speechSupported && voiceTarget !== "complaint") {
-      setTimeout(() => {
-        startVoiceInput("complaint");
-      }, 350);
+      startVoiceInput("complaint");
     }
+    document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -1019,10 +960,10 @@ export default function App() {
             MakkalVoice
           </a>
 
-          {/* Zone 2: Clean single-line text nav links (localized) */}
+          {/* Zone 2: Clean 3-link primary navigation (uncluttered) */}
           <nav
             aria-label="Primary navigation"
-            className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600"
+            className="hidden md:flex items-center gap-7 text-sm font-medium text-slate-600"
           >
             <a
               href="#workspace"
@@ -1038,22 +979,10 @@ export default function App() {
               {savedRecords.length > 0 ? ` (${savedRecords.length})` : ""}
             </a>
             <a
-              href="#how-it-works"
-              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.navHowItWorks}
-            </a>
-            <a
               href="#official-portals"
               className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
             >
               {t.navPortals}
-            </a>
-            <a
-              href="#privacy"
-              className="hover:text-slate-950 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
-            >
-              {t.navPrivacy}
             </a>
           </nav>
 
@@ -1243,8 +1172,10 @@ export default function App() {
               onOpenHandsFree={() => setHandsFreeOpen(true)}
               autosaved={autosaved}
               busy={busy}
-              isListening={voiceTarget === "complaint"}
-              interimTranscript={voiceTarget === "complaint" ? interimTranscript : ""}
+              isListening={voiceRecorder.isRecording && voiceTarget === "complaint"}
+              isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "complaint"}
+              voiceAudioLevel={voiceRecorder.audioLevel}
+              voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
               speechSupported={speechSupported}
               onToggleVoice={() => startVoiceInput("complaint")}
               speechOutputSupported={speechOutputSupported}
@@ -1274,8 +1205,10 @@ export default function App() {
                 setStep("describe");
               }}
               busy={busy}
-              isListening={voiceTarget === "answer"}
-              interimTranscript={voiceTarget === "answer" ? interimTranscript : ""}
+              isListening={voiceRecorder.isRecording && voiceTarget === "answer"}
+              isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "answer"}
+              voiceAudioLevel={voiceRecorder.audioLevel}
+              voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
               speechSupported={speechSupported}
               onToggleVoice={() => startVoiceInput("answer")}
               isSpeakingId={speakingMessageId}

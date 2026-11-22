@@ -74,7 +74,8 @@ export function EvidenceToolsPanel({
     <div className="mt-6 pb-6 border-b border-slate-200 space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <h3 className="text-sm sm:text-base font-semibold text-slate-950">
+          <h3 className="text-sm sm:text-base font-semibold text-slate-950 flex items-center gap-2">
+            <span className="font-mono text-xs font-semibold text-blue-700">02</span>
             {it.evidenceToolsTitle}
           </h3>
           <p className="mt-1 text-xs sm:text-sm text-slate-600 leading-relaxed">

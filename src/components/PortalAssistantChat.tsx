@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Loader2,
   MessageSquare,
   Mic,
   RotateCcw,
@@ -11,15 +12,12 @@ import {
 } from "lucide-react";
 import { LANGUAGE_LOCALE_MAP } from "../data/languages";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
+import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 import type { PortalChatMessage } from "../types";
 import {
-  getSpeechRecognitionConstructor,
-  isSpeechRecognitionSupported,
   isSpeechSynthesisSupported,
-  mapSpeechError,
   speakText,
   stopSpeakingText,
-  type SpeechRecognitionLike,
 } from "../utils/speech";
 
 interface PortalAssistantChatProps {
@@ -52,15 +50,22 @@ export function PortalAssistantChat({
   voiceUnsupportedText,
 }: PortalAssistantChatProps) {
   const [input, setInput] = useState("");
-  const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [speakingId, setSpeakingId] = useState<string | null>(null);
 
   const threadEndRef = useRef<HTMLDivElement | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-
-  const speechInputSupported = isSpeechRecognitionSupported();
   const speechOutputSupported = isSpeechSynthesisSupported();
+
+  const recorder = useVoiceRecorder({
+    language,
+    onTranscript: (spoken) => {
+      setInput((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+    },
+    onError: (msg) => setVoiceError(msg || voiceUnsupportedText || "Voice input failed."),
+  });
+
+  const speechInputSupported = recorder.isSupported;
+  const isListening = recorder.isRecording;
 
   // Auto-scroll scrollable thread whenever messages change or panel opens
   useEffect(() => {
@@ -84,80 +89,26 @@ export function PortalAssistantChat({
   // Cleanup voice handles on unmount
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          // ignore
-        }
-      }
+      recorder.cancelRecording();
       stopSpeakingText();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stopListening = () => {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {
-        // ignore
-      }
-      recognitionRef.current = null;
-    }
-    setIsListening(false);
+    recorder.stopRecording();
   };
 
   const toggleVoiceInput = () => {
-    if (isListening) {
-      stopListening();
+    if (recorder.isRecording) {
+      recorder.stopRecording();
       return;
     }
+    if (recorder.isTranscribing) return;
     setVoiceError(null);
     stopSpeakingText();
     setSpeakingId(null);
-
-    const SpeechCtor = getSpeechRecognitionConstructor();
-    if (!SpeechCtor) {
-      setVoiceError(voiceUnsupportedText || "Voice input is not supported in this browser.");
-      return;
-    }
-
-    try {
-      const recognition = new SpeechCtor();
-      recognition.lang = LANGUAGE_LOCALE_MAP[language] ?? "en-IN";
-      recognition.continuous = false;
-      recognition.interimResults = false;
-
-      recognition.onstart = () => setIsListening(true);
-      recognition.onresult = (event) => {
-        let spoken = "";
-        for (let i = event.resultIndex; i < event.results.length; i += 1) {
-          if (event.results[i].isFinal) {
-            spoken += event.results[i][0]?.transcript ?? "";
-          }
-        }
-        if (spoken.trim()) {
-          setInput((prev) =>
-            prev.trim() ? `${prev.trim()} ${spoken.trim()}` : spoken.trim(),
-          );
-        }
-      };
-      recognition.onerror = (event) => {
-        const mapped = mapSpeechError(event.error);
-        if (mapped) setVoiceError(mapped);
-        setIsListening(false);
-      };
-      recognition.onend = () => {
-        setIsListening(false);
-        recognitionRef.current = null;
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch {
-      setIsListening(false);
-      setVoiceError(voiceUnsupportedText || "Could not start voice input. Please type your question.");
-    }
+    void recorder.startRecording();
   };
 
   const toggleSpeakReply = (id: string, text: string) => {
@@ -384,6 +335,40 @@ export function PortalAssistantChat({
             </div>
           )}
 
+          {/* Live Voice Recording / Transcribing Indicator */}
+          {(isListening || recorder.isTranscribing) && (
+            <div className="mx-3 mb-2 px-3 py-2 rounded-lg border border-red-200 bg-red-50/90 flex items-center justify-between gap-2.5 text-xs">
+              {isListening ? (
+                <>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse shrink-0" />
+                    <span className="font-medium text-red-800 truncate">
+                      {st.chatStopListening}
+                    </span>
+                    <span className="font-mono tabular-nums text-red-700 shrink-0">
+                      {Math.floor(recorder.elapsedSeconds / 60)}:
+                      {String(recorder.elapsedSeconds % 60).padStart(2, "0")}
+                    </span>
+                  </div>
+                  <div
+                    className="w-16 h-1.5 bg-red-200 rounded-full overflow-hidden shrink-0"
+                    aria-hidden="true"
+                  >
+                    <div
+                      className="h-full bg-red-600 transition-all duration-75"
+                      style={{ width: `${Math.max(10, recorder.audioLevel)}%` }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center gap-2 text-blue-800 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden="true" />
+                  <span>Converting voice to text...</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Composer */}
           <form
             onSubmit={handleSubmit}
@@ -393,16 +378,20 @@ export function PortalAssistantChat({
               <button
                 type="button"
                 onClick={toggleVoiceInput}
-                disabled={busy}
+                disabled={busy || recorder.isTranscribing}
                 aria-label={isListening ? st.chatStopListening : st.chatSpeakBtn}
                 title={isListening ? st.chatStopListening : st.chatSpeakBtn}
-                className={`inline-flex items-center justify-center w-11 h-11 rounded-lg border transition-colors shrink-0 ${
+                className={`inline-flex items-center justify-center w-11 h-11 rounded-lg border transition-colors shrink-0 disabled:opacity-60 ${
                   isListening
                     ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
-                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
+                    : recorder.isTranscribing
+                      ? "bg-blue-50 text-blue-700 border-blue-300"
+                      : "bg-white text-slate-700 border-slate-300 hover:bg-slate-100"
                 }`}
               >
-                {isListening ? (
+                {recorder.isTranscribing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+                ) : isListening ? (
                   <Square className="w-4 h-4 fill-current" aria-hidden="true" />
                 ) : (
                   <Mic className="w-4 h-4" aria-hidden="true" />
@@ -421,7 +410,7 @@ export function PortalAssistantChat({
 
             <button
               type="submit"
-              disabled={busy || !input.trim()}
+              disabled={busy || recorder.isTranscribing || !input.trim()}
               aria-label={st.chatSendBtn}
               className="inline-flex items-center justify-center gap-1.5 px-3.5 h-11 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors whitespace-nowrap shrink-0 disabled:opacity-45"
             >

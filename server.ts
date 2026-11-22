@@ -17,8 +17,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = "gemini-4-hydrogen";
-const REQUEST_TIMEOUT_MS = 28_000;
+const MODEL_NAME = "gemini-3.1-flash-lite";
+const FAST_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
+const DRAFT_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
+const TRANSCRIBE_MODELS = [
+  "gemini-3.5-transcribe",
+  "gemini-3.1-flash-lite",
+  "gemini-4-hydrogen",
+] as const;
+const REQUEST_TIMEOUT_MS = 22_000;
+const ATTEMPT_TIMEOUT_MS = 14_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
 
 const VALID_CATEGORIES: ComplaintCategory[] = [
@@ -243,17 +251,82 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
-function mapGeminiError(error: unknown): { status: number; message: string } {
-  const err = error as { statusCode?: number; status?: number; message?: string };
-  const rawMessage = err?.message ?? "Unexpected error while communicating with Gemini.";
+function isRetryableGeminiError(error: unknown): boolean {
+  const err = error as { statusCode?: number; status?: number; code?: string | number; message?: string };
+  const msg = String(err?.message ?? "");
+  return (
+    err?.statusCode === 504 ||
+    err?.code === "TIMEOUT" ||
+    err?.status === 503 ||
+    err?.status === 500 ||
+    err?.status === 429 ||
+    err?.status === 404 ||
+    /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|NOT_FOUND|high demand|timeout|ECONNRESET/i.test(msg)
+  );
+}
 
-  if (err?.statusCode === 504) {
-    return { status: 504, message: "The AI service took too long to respond. Please try again." };
+async function generateWithFailover<T>(
+  models: readonly string[],
+  runForModel: (model: string) => Promise<T>,
+  attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
+): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i < models.length; i += 1) {
+    const model = models[i];
+    try {
+      return await withTimeout(runForModel(model), attemptTimeoutMs);
+    } catch (err) {
+      lastError = err;
+      console.warn(`[MakkalVoice AI] model "${model}" attempt failed:`, (err as Error)?.message?.slice(0, 180));
+      if (!isRetryableGeminiError(err) && i < models.length - 1) {
+        // Still try fallback model if format/model mismatch occurs on a specialized model
+        const msg = String((err as Error)?.message ?? "");
+        if (!/INVALID_ARGUMENT|unsupported|not found/i.test(msg)) {
+          throw err;
+        }
+      }
+      if (i < models.length - 1) {
+        await new Promise((r) => setTimeout(r, 350 * (i + 1)));
+      }
+    }
+  }
+  throw lastError ?? new Error("All AI models failed to respond.");
+}
+
+export type ServerErrorCode =
+  | "AI_TIMEOUT"
+  | "AI_RATE_LIMIT"
+  | "AI_AUTH_ERROR"
+  | "AI_UNAVAILABLE"
+  | "AI_BAD_REQUEST"
+  | "AI_GENERIC";
+
+function mapGeminiError(error: unknown): {
+  status: number;
+  code: ServerErrorCode;
+  message: string;
+  diagnostic?: string;
+} {
+  const err = error as { statusCode?: number; status?: number; code?: string | number; message?: string };
+  const rawMessage = err?.message ?? "Unexpected error while communicating with Gemini.";
+  const safeDiag = rawMessage
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
+    .slice(0, 260);
+
+  if (err?.statusCode === 504 || err?.code === "TIMEOUT") {
+    return {
+      status: 504,
+      code: "AI_TIMEOUT",
+      message: "The AI service took too long to respond. Please try again.",
+      diagnostic: safeDiag,
+    };
   }
   if (err?.status === 429 || rawMessage.includes("RESOURCE_EXHAUSTED") || rawMessage.includes("429")) {
     return {
       status: 429,
+      code: "AI_RATE_LIMIT",
       message: "Rate limit reached on the AI service. Please wait a moment and try again.",
+      diagnostic: safeDiag,
     };
   }
   if (
@@ -265,12 +338,32 @@ function mapGeminiError(error: unknown): { status: number; message: string } {
   ) {
     return {
       status: 503,
+      code: "AI_AUTH_ERROR",
       message: "Gemini API key is missing or invalid on the server. Check your server configuration.",
+      diagnostic: safeDiag,
+    };
+  }
+  if (err?.status === 503 || rawMessage.includes("UNAVAILABLE") || rawMessage.includes("overloaded")) {
+    return {
+      status: 503,
+      code: "AI_UNAVAILABLE",
+      message: "The AI service is temporarily busy. Please try again in a few seconds.",
+      diagnostic: safeDiag,
+    };
+  }
+  if (err?.status === 400 || rawMessage.includes("INVALID_ARGUMENT")) {
+    return {
+      status: 400,
+      code: "AI_BAD_REQUEST",
+      message: "Could not process this request format. Please try again.",
+      diagnostic: safeDiag,
     };
   }
   return {
     status: 502,
+    code: "AI_GENERIC",
     message: "Unable to generate response right now. Please try again.",
+    diagnostic: safeDiag,
   };
 }
 
@@ -442,50 +535,52 @@ async function startServer() {
       }
 
       const ai = getAiClient();
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType === "image/jpg" ? "image/jpeg" : mimeType,
-                  data: imageBase64,
+      const response = await generateWithFailover(
+        FAST_TEXT_MODELS,
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: mimeType === "image/jpg" ? "image/jpeg" : mimeType,
+                    data: imageBase64,
+                  },
                 },
-              },
-              {
-                text: [
-                  `Citizen's preferred language: ${language}`,
-                  `Allowed categories: ${VALID_CATEGORIES.join(", ")}`,
-                  "Examine this photo uploaded by an Indian citizen (it may be a civic problem like a pothole, broken streetlight, garbage pile, sewage leak, damaged electric pole, OR a bill/receipt/notice like an electricity bill, water bill, consumer invoice, or government receipt).",
-                  `1. Write 'issueSummary' (2-3 clear, factual sentences in ${language}) describing the visible issue or bill discrepancy so the citizen can review/edit it as their complaint description.`,
-                  "2. If a consumer number, EB service number, bill number, PNR, order ID, or application/ticket number is visible, put it in 'extractedReferenceNumber' (otherwise empty string). NEVER extract Aadhaar numbers or bank card/PIN numbers.",
-                  "3. Pick the single best 'suggestedCategory' from the allowed categories.",
-                  "4. If a street name, ward, locality, or city is visibly printed on a bill/signboard, put it in 'extractedLocationHint' (otherwise empty string).",
-                ].join("\n"),
-              },
-            ],
-          },
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                issueSummary: { type: Type.STRING },
-                extractedReferenceNumber: { type: Type.STRING },
-                suggestedCategory: { type: Type.STRING },
-                extractedLocationHint: { type: Type.STRING },
-              },
-              required: [
-                "issueSummary",
-                "extractedReferenceNumber",
-                "suggestedCategory",
-                "extractedLocationHint",
+                {
+                  text: [
+                    `Citizen's preferred language: ${language}`,
+                    `Allowed categories: ${VALID_CATEGORIES.join(", ")}`,
+                    "Examine this photo uploaded by an Indian citizen (it may be a civic problem like a pothole, broken streetlight, garbage pile, sewage leak, damaged electric pole, OR a bill/receipt/notice like an electricity bill, water bill, consumer invoice, or government receipt).",
+                    `1. Write 'issueSummary' (2-3 clear, factual sentences in ${language}) describing the visible issue or bill discrepancy so the citizen can review/edit it as their complaint description.`,
+                    "2. If a consumer number, EB service number, bill number, PNR, order ID, or application/ticket number is visible, put it in 'extractedReferenceNumber' (otherwise empty string). NEVER extract Aadhaar numbers or bank card/PIN numbers.",
+                    "3. Pick the single best 'suggestedCategory' from the allowed categories.",
+                    "4. If a street name, ward, locality, or city is visibly printed on a bill/signboard, put it in 'extractedLocationHint' (otherwise empty string).",
+                  ].join("\n"),
+                },
               ],
             },
-          },
-        }),
+            config: {
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  issueSummary: { type: Type.STRING },
+                  extractedReferenceNumber: { type: Type.STRING },
+                  suggestedCategory: { type: Type.STRING },
+                  extractedLocationHint: { type: Type.STRING },
+                },
+                required: [
+                  "issueSummary",
+                  "extractedReferenceNumber",
+                  "suggestedCategory",
+                  "extractedLocationHint",
+                ],
+              },
+            },
+          }),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -499,7 +594,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/analyze-evidence] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -527,32 +626,42 @@ async function startServer() {
       }
 
       const ai = getAiClient();
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: {
-            parts: [
-              {
-                inlineData: {
-                  mimeType: mimeType === "audio/x-m4a" || mimeType === "audio/m4a" ? "audio/mp4" : mimeType,
-                  data: audioBase64,
+      const normalizedMime =
+        mimeType === "audio/x-m4a" || mimeType === "audio/m4a" ? "audio/mp4" : mimeType;
+
+      const dictationPrompt = [
+        `Transcribe this Indian citizen voice recording in ${language} (Smart Flow Dictation style).`,
+        `Write clean, naturally punctuated sentences in ${language} script, keeping any spoken English words, street names, or digits accurate.`,
+        "Automatically remove filler sounds (um, uh, ahh, stammering) and false starts while keeping 100% of the speaker's true meaning and facts.",
+        "Return ONLY the cleaned transcript text with no labels, quotes, or commentary. If there is only silence or noise with no intelligible speech, return an empty string.",
+      ].join("\n");
+
+      const response = await generateWithFailover(
+        TRANSCRIBE_MODELS,
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: normalizedMime,
+                    data: audioBase64,
+                  },
                 },
-              },
-              {
-                text: [
-                  `Listen carefully to this citizen voice recording from India. Their selected language is: ${language}.`,
-                  `Transcribe ONLY the exact words spoken into clean, natural ${language} script (preserve English words or numbers if spoken).`,
-                  "Return ONLY the raw spoken transcript text with no labels, no quotes, and no commentary.",
-                  "If there is only silence or background noise with no intelligible speech, return an empty string.",
-                ].join("\n"),
-              },
-            ],
-          },
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-          },
-        }),
-        REQUEST_TIMEOUT_MS,
+                {
+                  text:
+                    model === "gemini-3.5-transcribe"
+                      ? `Transcribe this audio cleanly in ${language} with natural punctuation and no filler words.`
+                      : dictationPrompt,
+                },
+              ],
+            },
+            ...(model === "gemini-3.5-transcribe"
+              ? {}
+              : { config: { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } }),
+          }),
+        ATTEMPT_TIMEOUT_MS,
       );
 
       const transcript = cleanMultilineText(response.text, 2500);
@@ -560,7 +669,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/transcribe-audio] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -578,34 +691,36 @@ async function startServer() {
 
       const ai = getAiClient();
 
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: [
-            `Spoken/typed language: ${language}`,
-            `Citizen statement: """${complaint}"""`,
-            `Allowed categories: ${VALID_CATEGORIES.join(", ")}`,
-            `Allowed Indian States/UTs: ${INDIAN_STATES_AND_UTS.join(", ")}`,
-          ].join("\n\n"),
-          config: {
-            systemInstruction:
-              "Extract ONLY what is explicitly stated or strongly implied by the citizen's spoken problem: category (one of the allowed categories), state (exact match from allowed Indian states/UTs list if mentioned or unambiguously implied by a city like Chennai->Tamil Nadu, Bengaluru->Karnataka, Mumbai->Maharashtra, Pune->Maharashtra, Hyderabad->Telangana, Delhi->Delhi (NCT), Kolkata->West Bengal; otherwise empty string), district (English name if mentioned/implied, else empty), town (city/locality if mentioned, else empty), street (street/landmark if mentioned, else empty). Never fabricate locations not mentioned.",
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                category: { type: Type.STRING },
-                state: { type: Type.STRING },
-                district: { type: Type.STRING },
-                town: { type: Type.STRING },
-                street: { type: Type.STRING },
+      const response = await generateWithFailover(
+        FAST_TEXT_MODELS,
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: [
+              `Spoken/typed language: ${language}`,
+              `Citizen statement: """${complaint}"""`,
+              `Allowed categories: ${VALID_CATEGORIES.join(", ")}`,
+              `Allowed Indian States/UTs: ${INDIAN_STATES_AND_UTS.join(", ")}`,
+            ].join("\n\n"),
+            config: {
+              systemInstruction:
+                "Extract ONLY what is explicitly stated or strongly implied by the citizen's spoken problem: category (one of the allowed categories), state (exact match from allowed Indian states/UTs list if mentioned or unambiguously implied by a city like Chennai->Tamil Nadu, Bengaluru->Karnataka, Mumbai->Maharashtra, Pune->Maharashtra, Hyderabad->Telangana, Delhi->Delhi (NCT), Kolkata->West Bengal; otherwise empty string), district (English name if mentioned/implied, else empty), town (city/locality if mentioned, else empty), street (street/landmark if mentioned, else empty). Never fabricate locations not mentioned.",
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  category: { type: Type.STRING },
+                  state: { type: Type.STRING },
+                  district: { type: Type.STRING },
+                  town: { type: Type.STRING },
+                  street: { type: Type.STRING },
+                },
+                required: ["category", "state", "district", "town", "street"],
               },
-              required: ["category", "state", "district", "town", "street"],
             },
-          },
-        }),
-        REQUEST_TIMEOUT_MS,
+          }),
+        ATTEMPT_TIMEOUT_MS,
       );
 
       const rawText = (response.text ?? "").trim();
@@ -624,7 +739,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/voice-understand] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -706,26 +825,28 @@ async function startServer() {
       ].join("\n");
 
       const callModel = async (extraAvoid = "") => {
-        const response = await withTimeout(
-          ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: buildPrompt(extraAvoid),
-            config: {
-              systemInstruction,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              responseMimeType: "application/json",
-              responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                  complete: { type: Type.BOOLEAN },
-                  question: { type: Type.STRING },
-                  reason: { type: Type.STRING },
+        const response = await generateWithFailover(
+          FAST_TEXT_MODELS,
+          (model) =>
+            ai.models.generateContent({
+              model,
+              contents: buildPrompt(extraAvoid),
+              config: {
+                systemInstruction,
+                thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+                responseMimeType: "application/json",
+                responseSchema: {
+                  type: Type.OBJECT,
+                  properties: {
+                    complete: { type: Type.BOOLEAN },
+                    question: { type: Type.STRING },
+                    reason: { type: Type.STRING },
+                  },
+                  required: ["complete", "question", "reason"],
                 },
-                required: ["complete", "question", "reason"],
               },
-            },
-          }),
-          REQUEST_TIMEOUT_MS,
+            }),
+          ATTEMPT_TIMEOUT_MS,
         );
 
         const rawText = (response.text ?? "").trim();
@@ -771,7 +892,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/complaint-followup] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -867,14 +992,16 @@ async function startServer() {
         .filter(Boolean)
         .join("\n\n");
 
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: prompt,
-          config: {
-            systemInstruction,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-            responseMimeType: "application/json",
+      const response = await generateWithFailover(
+        DRAFT_TEXT_MODELS,
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: prompt,
+            config: {
+              systemInstruction,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+              responseMimeType: "application/json",
             responseSchema: {
               type: Type.OBJECT,
               properties: {
@@ -946,8 +1073,8 @@ async function startServer() {
                 "englishButtonGuide",
               ],
             },
-          },
-        }),
+            },
+          }),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -1049,7 +1176,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/complaint-draft] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -1096,10 +1227,12 @@ async function startServer() {
         year: "numeric",
       });
 
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: [
+      const response = await generateWithFailover(
+        FAST_TEXT_MODELS,
+        (model) =>
+          ai.models.generateContent({
+            model,
+            contents: [
             `Today's Date: ${todayFormatted}`,
             `Original Filing Date: ${filedDate || "Earlier"}`,
             `Original Portal: ${portalName || "Official Government Portal"}`,
@@ -1136,8 +1269,8 @@ async function startServer() {
                 "portalLanguageTip",
               ],
             },
-          },
-        }),
+            },
+          }),
         REQUEST_TIMEOUT_MS,
       );
 
@@ -1163,7 +1296,11 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/escalation-draft] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
+      });
     }
   });
 
@@ -1265,18 +1402,20 @@ async function startServer() {
       ].join("\n");
 
       const ai = getAiClient();
-      const chat = ai.chats.create({
-        model: MODEL_NAME,
-        history: sanitizedHistory,
-        config: {
-          systemInstruction,
-          thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+      const response = await generateWithFailover(
+        FAST_TEXT_MODELS,
+        (model) => {
+          const chat = ai.chats.create({
+            model,
+            history: sanitizedHistory,
+            config: {
+              systemInstruction,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            },
+          });
+          return chat.sendMessage({ message });
         },
-      });
-
-      const response = await withTimeout(
-        chat.sendMessage({ message }),
-        REQUEST_TIMEOUT_MS,
+        ATTEMPT_TIMEOUT_MS,
       );
 
       const reply = cleanMultilineText(response.text, 4000);
@@ -1288,7 +1427,10 @@ async function startServer() {
     } catch (error) {
       console.error("[/api/portal-assistant-chat] error:", error);
       const mapped = mapGeminiError(error);
-      res.status(mapped.status).json({ error: mapped.message });
+      res.status(mapped.status).json({
+        error: mapped.message,
+        code: mapped.code,
+      });
     }
   });
 

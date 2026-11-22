@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { LANGUAGE_LOCALE_MAP } from "../data/languages";
+import { getLocalizedError } from "../data/localizedErrors";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
 import type { PortalChatMessage } from "../types";
@@ -337,33 +338,40 @@ export function PortalAssistantChat({
 
           {/* Live Voice Recording / Transcribing Indicator */}
           {(isListening || recorder.isTranscribing) && (
-            <div className="mx-3 mb-2 px-3 py-2 rounded-lg border border-red-200 bg-red-50/90 flex items-center justify-between gap-2.5 text-xs">
+            <div className="mx-3 mb-2 px-3 py-2 rounded-lg border border-red-200 bg-red-50/90 space-y-1.5 text-xs">
               {isListening ? (
                 <>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse shrink-0" />
-                    <span className="font-medium text-red-800 truncate">
-                      {st.chatStopListening}
-                    </span>
-                    <span className="font-mono tabular-nums text-red-700 shrink-0">
-                      {Math.floor(recorder.elapsedSeconds / 60)}:
-                      {String(recorder.elapsedSeconds % 60).padStart(2, "0")}
-                    </span>
-                  </div>
-                  <div
-                    className="w-16 h-1.5 bg-red-200 rounded-full overflow-hidden shrink-0"
-                    aria-hidden="true"
-                  >
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="inline-block w-2 h-2 rounded-full bg-red-600 animate-pulse shrink-0" />
+                      <span className="font-medium text-red-800 truncate">
+                        {st.chatStopListening}
+                      </span>
+                      <span className="font-mono tabular-nums text-red-700 shrink-0">
+                        {Math.floor(recorder.elapsedSeconds / 60)}:
+                        {String(recorder.elapsedSeconds % 60).padStart(2, "0")}
+                      </span>
+                    </div>
                     <div
-                      className="h-full bg-red-600 transition-all duration-75"
-                      style={{ width: `${Math.max(10, recorder.audioLevel)}%` }}
-                    />
+                      className="w-16 h-1.5 bg-red-200 rounded-full overflow-hidden shrink-0"
+                      aria-hidden="true"
+                    >
+                      <div
+                        className="h-full bg-red-600 transition-all duration-75"
+                        style={{ width: `${Math.max(10, recorder.audioLevel)}%` }}
+                      />
+                    </div>
                   </div>
+                  {recorder.liveTranscript && (
+                    <p className="text-[11px] text-slate-700 bg-white/90 rounded px-2 py-1 italic truncate">
+                      {recorder.liveTranscript}
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2 text-blue-800 font-medium">
                   <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" aria-hidden="true" />
-                  <span>Converting voice to text...</span>
+                  <span>{getLocalizedError("CONVERTING_VOICE", language)}</span>
                 </div>
               )}
             </div>

@@ -24,6 +24,7 @@ import {
   SAMPLE_SCENARIOS,
 } from "./data/languages";
 import { getLocalizedDistrictName, getLocalizedStateName } from "./data/localizedLocations";
+import { resolveLocalizedErrorMessage } from "./data/localizedErrors";
 import { localizePortalEntry, PORTAL_LANGUAGE_SUPPORT } from "./data/localizedPortals";
 import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
 import { getSubmissionStrings } from "./data/submissionTranslations";
@@ -363,21 +364,62 @@ export default function App() {
         .join(" · ");
       setScanNotice(extras ? `${it.scanSuccessPrefix} (${extras})` : it.scanSuccessPrefix);
     } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : it.scanErrorGeneric);
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setScanningEvidence(false);
     }
   };
 
-  // Innovation 7: Hands-Free Voice Assistant completion
-  const handleHandsFreeComplete = (spokenComplaint: string, spokenLocation: string) => {
+  // Innovation 7: 4-Step Hands-Free Voice Assistant completion (Problem + Location + Name + Phone)
+  const handleHandsFreeComplete = (
+    spokenComplaint: string,
+    spokenLocation: string,
+    spokenName: string,
+    spokenPhone: string,
+  ) => {
+    const combinedForExtract = [spokenComplaint, spokenLocation].filter(Boolean).join(". ");
     setForm((prev) => ({
       ...prev,
       complaint: spokenComplaint || prev.complaint,
       street: spokenLocation && !prev.street.trim() ? spokenLocation : prev.street,
+      name: spokenName || prev.name,
+      contact: spokenPhone || prev.contact,
     }));
+    setFieldErrors({});
     setStep("describe");
     document.getElementById("complaint-form")?.scrollIntoView({ behavior: "smooth" });
+
+    // Silently auto-detect category, state, district & town from the hands-free transcript
+    if (combinedForExtract.trim().length >= 8) {
+      setExtractingVoice(true);
+      void requestVoiceExtraction(combinedForExtract, form.language)
+        .then((extracted) => {
+          setForm((prev) => {
+            const nextState = extracted.state || prev.state;
+            const { district, customDistrict } = applyDistrictToForm(
+              prev,
+              nextState,
+              extracted.district ?? "",
+            );
+            return {
+              ...prev,
+              category: extracted.category ?? prev.category,
+              state: nextState,
+              district,
+              customDistrict,
+              town: extracted.town || prev.town,
+              street: extracted.street || prev.street,
+            };
+          });
+          setAutoFillNotice(t.autoFilledSuccess);
+        })
+        .catch(() => {
+          // Non-blocking background enrichment
+        })
+        .finally(() => {
+          setExtractingVoice(false);
+        });
+    }
   };
 
   const handleApplySample = (sampleIndex: number) => {
@@ -512,9 +554,7 @@ export default function App() {
       });
       setAutoFillNotice(t.autoFilledSuccess);
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error ? err.message : "Could not detect details automatically.",
-      );
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setExtractingVoice(false);
     }
@@ -543,11 +583,7 @@ export default function App() {
       setActiveSavedId(null);
       setStep("review");
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Could not generate the complaint draft. Please try again.",
-      );
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setBusy(false);
     }
@@ -597,11 +633,7 @@ export default function App() {
         handleSpeakMessage(questionId, data.question);
       }
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Could not fetch the next clarification question. Please try again.",
-      );
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setBusy(false);
     }
@@ -824,11 +856,7 @@ export default function App() {
       setStep("review");
       document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
     } catch (err) {
-      setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "Could not draft escalation letter right now. Please try again.",
-      );
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setEscalatingId(null);
     }
@@ -883,11 +911,7 @@ export default function App() {
       };
       setPortalChatMessages((prev) => [...prev, assistantMessage]);
     } catch (err) {
-      setPortalChatError(
-        err instanceof Error
-          ? err.message
-          : "Could not reach the assistant right now. Please try again.",
-      );
+      setPortalChatError(resolveLocalizedErrorMessage(err, form.language));
     } finally {
       setPortalChatBusy(false);
     }
@@ -1176,6 +1200,7 @@ export default function App() {
               isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "complaint"}
               voiceAudioLevel={voiceRecorder.audioLevel}
               voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
+              voiceLiveTranscript={voiceTarget === "complaint" ? voiceRecorder.liveTranscript : ""}
               speechSupported={speechSupported}
               onToggleVoice={() => startVoiceInput("complaint")}
               speechOutputSupported={speechOutputSupported}
@@ -1209,6 +1234,7 @@ export default function App() {
               isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "answer"}
               voiceAudioLevel={voiceRecorder.audioLevel}
               voiceElapsedSeconds={voiceRecorder.elapsedSeconds}
+              voiceLiveTranscript={voiceTarget === "answer" ? voiceRecorder.liveTranscript : ""}
               speechSupported={speechSupported}
               onToggleVoice={() => startVoiceInput("answer")}
               isSpeakingId={speakingMessageId}
@@ -1417,13 +1443,15 @@ export default function App() {
         </div>
       </footer>
 
-      {/* Innovation 7: Hands-Free Voice Conversation Mode Modal */}
+      {/* Innovation 7: 4-Step Hands-Free Guided Voice Interview Modal */}
       <HandsFreeVoiceModal
         open={handsFreeOpen}
         onClose={() => setHandsFreeOpen(false)}
         language={form.language}
         it={it}
         initialComplaint={form.complaint}
+        initialName={form.name}
+        initialPhone={form.contact}
         onComplete={handleHandsFreeComplete}
       />
 

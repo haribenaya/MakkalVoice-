@@ -9,6 +9,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { getLocalizedError } from "../data/localizedErrors";
 import type { UiStrings } from "../data/translations";
 import type { AnswerEntry, ChatMessage } from "../types";
 
@@ -30,6 +31,7 @@ interface ClarifyChatProps {
   isTranscribing: boolean;
   voiceAudioLevel: number;
   voiceElapsedSeconds: number;
+  voiceLiveTranscript?: string;
   speechSupported: boolean;
   onToggleVoice: () => void;
   isSpeakingId: string | null;
@@ -43,6 +45,7 @@ interface ClarifyChatProps {
 
 export function ClarifyChat({
   t,
+  language,
   categoryLabel,
   locationLabel,
   messages,
@@ -58,6 +61,7 @@ export function ClarifyChat({
   isTranscribing,
   voiceAudioLevel,
   voiceElapsedSeconds,
+  voiceLiveTranscript = "",
   speechSupported,
   onToggleVoice,
   isSpeakingId,
@@ -266,7 +270,7 @@ export function ClarifyChat({
               {isTranscribing ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-                  <span>Converting voice...</span>
+                  <span>{getLocalizedError("CONVERTING_VOICE", language)}</span>
                 </>
               ) : isListening ? (
                 <>
@@ -301,6 +305,11 @@ export function ClarifyChat({
                 style={{ width: `${Math.max(8, voiceAudioLevel)}%` }}
               />
             </div>
+            {voiceLiveTranscript && (
+              <p className="text-xs text-slate-800 bg-white/90 border border-red-200/70 rounded-lg px-3 py-2">
+                {voiceLiveTranscript}
+              </p>
+            )}
           </div>
         )}
 

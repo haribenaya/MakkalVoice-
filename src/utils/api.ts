@@ -48,6 +48,18 @@ export function buildPrivacySafePayload(
   };
 }
 
+export class ApiError extends Error {
+  code?: string;
+  status?: number;
+
+  constructor(message: string, code?: string, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export async function postApiJSON<T>(
   endpoint: string,
   payload: Record<string, unknown>,
@@ -62,8 +74,10 @@ export async function postApiJSON<T>(
       body: JSON.stringify(payload),
     });
   } catch {
-    throw new Error(
+    throw new ApiError(
       "Could not connect to the server. Please check your connection and try again.",
+      "NETWORK_ERROR",
+      0,
     );
   }
 
@@ -86,7 +100,8 @@ export async function postApiJSON<T>(
       typeof data.error === "string" && data.error.trim()
         ? data.error.trim()
         : `Request failed with status ${response.status}. Please try again.`;
-    throw new Error(serverMessage);
+    const code = typeof data.code === "string" ? data.code : undefined;
+    throw new ApiError(serverMessage, code, response.status);
   }
 
   return data as T;

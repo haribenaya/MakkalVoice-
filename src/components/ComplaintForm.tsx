@@ -21,6 +21,7 @@ import { COMPLAINT_CATEGORIES, LANGUAGES, SAMPLE_SCENARIOS } from "../data/langu
 import { INDIA_STATE_DISTRICTS, INDIAN_STATES_AND_UTS } from "../data/indiaLocations";
 import type { InnovationStrings } from "../data/innovationTranslations";
 import { getLocalizedDistrictName, getLocalizedStateName } from "../data/localizedLocations";
+import { getLocalizedError } from "../data/localizedErrors";
 import { getLocalizedSampleLabel } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
@@ -62,6 +63,7 @@ interface ComplaintFormProps {
   isTranscribing: boolean;
   voiceAudioLevel: number;
   voiceElapsedSeconds: number;
+  voiceLiveTranscript?: string;
   speechSupported: boolean;
   onToggleVoice: () => void;
   speechOutputSupported: boolean;
@@ -95,6 +97,7 @@ export function ComplaintForm({
   isTranscribing,
   voiceAudioLevel,
   voiceElapsedSeconds,
+  voiceLiveTranscript = "",
   speechSupported,
   onToggleVoice,
   speechOutputSupported,
@@ -302,7 +305,7 @@ export function ComplaintForm({
                 {isTranscribing ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin shrink-0" aria-hidden="true" />
-                    <span>Converting voice to text...</span>
+                    <span className="truncate">{getLocalizedError("CONVERTING_VOICE", form.language)}</span>
                   </>
                 ) : isListening ? (
                   <>
@@ -374,6 +377,14 @@ export function ComplaintForm({
                     style={{ width: `${Math.max(8, voiceAudioLevel)}%` }}
                   />
                 </div>
+                {voiceLiveTranscript && (
+                  <p className="text-xs text-slate-800 bg-white/90 border border-red-200/70 rounded-lg px-3 py-2 leading-relaxed">
+                    <span className="font-semibold text-red-700 me-1.5">
+                      {getLocalizedError("LIVE_PREVIEW_LABEL", form.language)}:
+                    </span>
+                    {voiceLiveTranscript}
+                  </p>
+                )}
               </div>
             )}
 

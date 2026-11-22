@@ -60,7 +60,14 @@ export function PortalAssistantChat({
   const recorder = useVoiceRecorder({
     language,
     onTranscript: (spoken) => {
-      setInput((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+      const cleanedSpoken = spoken.trim();
+      if (!cleanedSpoken) return;
+      setInput((prev) => {
+        const trimmedPrev = prev.trim();
+        if (!trimmedPrev) return cleanedSpoken;
+        if (trimmedPrev.endsWith(cleanedSpoken)) return prev;
+        return `${trimmedPrev} ${cleanedSpoken}`;
+      });
     },
     onError: (msg) => setVoiceError(msg || voiceUnsupportedText || "Voice input failed."),
   });

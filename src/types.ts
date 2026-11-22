@@ -107,6 +107,9 @@ export interface PortalEntry {
   authorityScope: string;
   description: string;
   helpline?: string;
+  officialEmail?: string;
+  officialWhatsApp?: string;
+  officialWhatsAppDisplay?: string;
 }
 
 export interface DocumentChecklistItem {

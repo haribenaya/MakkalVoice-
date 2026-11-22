@@ -9,7 +9,6 @@ export interface UseVoiceRecorderOptions {
   language: string;
   onTranscript: (text: string) => void;
   onError?: (message: string) => void;
-  /** When true (Hands-Free Mode), automatically stops recording ~2.4s after user finishes speaking */
   autoStopOnSilence?: boolean;
 }
 
@@ -57,6 +56,51 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+function normalizeForCompare(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Removes accidental full-string or consecutive-sentence duplication returned
+ * by speech transcription engines or fragmented audio containers.
+ */
+export function deduplicateSpokenText(raw: string): string {
+  const cleaned = raw.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+
+  // 1. Check if the entire transcript is the same phrase repeated twice back-to-back
+  const words = cleaned.split(" ");
+  if (words.length >= 4 && words.length % 2 === 0) {
+    const half = words.length / 2;
+    const firstHalf = words.slice(0, half).join(" ");
+    const secondHalf = words.slice(half).join(" ");
+    if (normalizeForCompare(firstHalf) === normalizeForCompare(secondHalf)) {
+      return firstHalf;
+    }
+  }
+
+  // 2. Deduplicate consecutive identical sentences / lines
+  const segments = cleaned
+    .split(/(?<=[.?!।])\s+|\n+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (segments.length <= 1) return cleaned;
+
+  const deduped: string[] = [];
+  for (const seg of segments) {
+    const norm = normalizeForCompare(seg);
+    const prevNorm = deduped.length > 0 ? normalizeForCompare(deduped[deduped.length - 1]) : "";
+    if (norm && norm === prevNorm) continue;
+    deduped.push(seg);
+  }
+  return deduped.join(" ");
+}
+
 export function isVoiceRecorderSupported(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -68,8 +112,8 @@ export function isVoiceRecorderSupported(): boolean {
 
 /**
  * Exclusive Hardware MediaRecorder -> Server-Side AI Audio Transcription hook.
- * Completely replaces browser Web Speech API so mobile/desktop microphones never
- * suffer audio-focus lock conflicts and all 13 Indian languages & dialects transcribe reliably.
+ * Uses strict single-session guards and contiguous audio capture (no timeslice fragmentation)
+ * so dictated text is transcribed cleanly once and never duplicated.
  */
 export function useVoiceRecorder({
   language,
@@ -86,6 +130,10 @@ export function useVoiceRecorder({
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const cancelledRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const isRecordingRef = useRef(false);
+  const isTranscribingRef = useRef(false);
+  const sessionIdRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -116,6 +164,8 @@ export function useVoiceRecorder({
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
+    isStartingRef.current = false;
+    isRecordingRef.current = false;
     setAudioLevel(0);
     setElapsedSeconds(0);
     setIsRecording(false);
@@ -123,7 +173,9 @@ export function useVoiceRecorder({
 
   const cancelRecording = useCallback(() => {
     cancelledRef.current = true;
+    sessionIdRef.current += 1;
     const rec = mediaRecorderRef.current;
+    mediaRecorderRef.current = null;
     if (rec && rec.state !== "inactive") {
       try {
         rec.stop();
@@ -131,7 +183,6 @@ export function useVoiceRecorder({
         // ignore
       }
     }
-    mediaRecorderRef.current = null;
     chunksRef.current = [];
     cleanupAudioHardware();
   }, [cleanupAudioHardware]);
@@ -157,14 +208,20 @@ export function useVoiceRecorder({
   }, [cancelRecording]);
 
   const startRecording = useCallback(async () => {
-    if (isRecording || isTranscribing) return;
+    // Synchronous guard prevents rapid double-taps or slow getUserMedia from starting two recorders
+    if (isStartingRef.current || isRecordingRef.current || isTranscribingRef.current) {
+      return;
+    }
     if (!isVoiceRecorderSupported()) {
       onErrorRef.current?.(getLocalizedError("MIC_UNSUPPORTED", languageRef.current));
       return;
     }
 
+    isStartingRef.current = true;
     cancelledRef.current = false;
     chunksRef.current = [];
+    const currentSessionId = sessionIdRef.current + 1;
+    sessionIdRef.current = currentSessionId;
 
     let stream: MediaStream;
     try {
@@ -176,6 +233,7 @@ export function useVoiceRecorder({
         },
       });
     } catch (err) {
+      isStartingRef.current = false;
       const name = err instanceof DOMException ? err.name : "";
       if (name === "NotAllowedError" || name === "PermissionDeniedError") {
         onErrorRef.current?.(getLocalizedError("MIC_PERMISSION_DENIED", languageRef.current));
@@ -187,9 +245,16 @@ export function useVoiceRecorder({
       return;
     }
 
+    // If cancelled while waiting for mic permission, release tracks immediately
+    if (cancelledRef.current || sessionIdRef.current !== currentSessionId) {
+      stream.getTracks().forEach((track) => track.stop());
+      isStartingRef.current = false;
+      return;
+    }
+
     streamRef.current = stream;
 
-    // Live sound-level meter + optional Hands-Free auto-silence detection
+    // Live sound-level meter
     try {
       const AudioCtx =
         window.AudioContext ||
@@ -211,7 +276,7 @@ export function useVoiceRecorder({
         const startedAtMs = Date.now();
 
         const updateMeter = () => {
-          if (!audioCtxRef.current) return;
+          if (!audioCtxRef.current || sessionIdRef.current !== currentSessionId) return;
           analyser.getByteTimeDomainData(dataArray);
           let sumSq = 0;
           for (let i = 0; i < dataArray.length; i += 1) {
@@ -255,22 +320,30 @@ export function useVoiceRecorder({
     }
 
     mediaRecorderRef.current = recorder;
+    let stopHandled = false;
 
     recorder.ondataavailable = (event) => {
+      if (sessionIdRef.current !== currentSessionId) return;
       if (event.data && event.data.size > 0) {
         chunksRef.current.push(event.data);
       }
     };
 
     recorder.onstop = () => {
+      if (stopHandled) return;
+      stopHandled = true;
+
+      const isStaleSession = sessionIdRef.current !== currentSessionId;
       const wasCancelled = cancelledRef.current;
       const recordedChunks = chunksRef.current;
       const finalMime = recorder.mimeType || mimeType || "audio/webm";
-      mediaRecorderRef.current = null;
+      if (mediaRecorderRef.current === recorder) {
+        mediaRecorderRef.current = null;
+      }
       chunksRef.current = [];
       cleanupAudioHardware();
 
-      if (wasCancelled || recordedChunks.length === 0) {
+      if (isStaleSession || wasCancelled || recordedChunks.length === 0) {
         return;
       }
 
@@ -280,11 +353,13 @@ export function useVoiceRecorder({
         return;
       }
 
+      isTranscribingRef.current = true;
       setIsTranscribing(true);
       void blobToBase64(blob)
         .then((base64) => requestAudioTranscription(base64, finalMime, languageRef.current))
         .then((result) => {
-          const text = (result.transcript ?? "").trim();
+          if (sessionIdRef.current !== currentSessionId) return;
+          const text = deduplicateSpokenText(result.transcript ?? "");
           if (text) {
             onTranscriptRef.current(text);
           } else {
@@ -292,16 +367,22 @@ export function useVoiceRecorder({
           }
         })
         .catch((err) => {
+          if (sessionIdRef.current !== currentSessionId) return;
           onErrorRef.current?.(
             resolveLocalizedErrorMessage(err, languageRef.current, "MIC_TRANSCRIBE_FAILED"),
           );
         })
         .finally(() => {
+          isTranscribingRef.current = false;
           setIsTranscribing(false);
         });
     };
 
-    recorder.start(250);
+    // Start without a short timeslice so the browser produces one clean contiguous audio container
+    // (avoids fragmented WebM cluster timestamps that can cause models to hear segments twice).
+    recorder.start();
+    isStartingRef.current = false;
+    isRecordingRef.current = true;
     setIsRecording(true);
     setElapsedSeconds(0);
 
@@ -313,7 +394,7 @@ export function useVoiceRecorder({
         stopRecording();
       }
     }, 300);
-  }, [cleanupAudioHardware, isRecording, isTranscribing, stopRecording]);
+  }, [cleanupAudioHardware, stopRecording]);
 
   return {
     isSupported: isVoiceRecorderSupported(),

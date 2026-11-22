@@ -29,6 +29,9 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official portal for overbilling, defective goods, e-commerce refunds, broadband/telecom disputes, and service deficiency.",
     helpline: "1915",
+    officialEmail: "nch-ca@gov.in",
+    officialWhatsApp: "918800001915",
+    officialWhatsAppDisplay: "+91 88000 01915",
     tags: ["consumer", "billing", "refund", "ecommerce", "product", "overcharge"],
   },
   railmadad: {
@@ -51,6 +54,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official portal for unresolved bank, ATM, UPI transaction failure, credit card, or NBFC complaints.",
     helpline: "14448",
+    officialEmail: "crpc@rbi.org.in",
     tags: ["bank", "upi", "atm", "loan", "finance", "credit card"],
   },
   cybercrime_india: {
@@ -73,6 +77,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official portal to apply for free legal aid, Lok Adalat mediation, and legal support for eligible citizens.",
     helpline: "15100",
+    officialEmail: "nalsa-dla@nic.in",
     tags: ["legal", "lawyer", "court", "aid", "dispute"],
   },
   rti_online: {
@@ -96,6 +101,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official Tamil Nadu state portal for municipal, revenue, ration card, pension, water, electricity, and district complaints.",
     helpline: "1100",
+    officialEmail: "cmcell@tn.gov.in",
     states: ["Tamil Nadu"],
     tags: ["tamil nadu", "state", "civic", "revenue", "ration", "government"],
   },
@@ -108,6 +114,9 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Direct municipal portal for Chennai street lights, roads, potholes, storm water drains, garbage collection, and public health.",
     helpline: "1913",
+    officialEmail: "commissioner@chennaicorporation.gov.in",
+    officialWhatsApp: "919445061913",
+    officialWhatsAppDisplay: "+91 94450 61913",
     states: ["Tamil Nadu"],
     districts: ["Chennai"],
     tags: ["chennai", "streetlight", "road", "garbage", "stormwater", "civic"],
@@ -121,6 +130,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Direct official portal for drinking water supply, pipe leakage, sewage overflow, and drainage blockage in Chennai.",
     helpline: "044-45674567",
+    officialEmail: "cmwssb@tn.gov.in",
     states: ["Tamil Nadu"],
     districts: ["Chennai"],
     tags: ["chennai", "water", "sewage", "drainage", "pipeline"],
@@ -134,6 +144,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official electricity portal for power cuts, damaged poles, hanging live wires, transformer faults, and EB billing issues across Tamil Nadu.",
     helpline: "94987 94987",
+    officialEmail: "chairman@tnebnet.org",
     states: ["Tamil Nadu"],
     tags: ["electricity", "power", "eb", "transformer", "wire", "bill", "tamil nadu"],
   },
@@ -160,6 +171,9 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Direct municipal portal for Bengaluru street lights, potholes, waste collection, trees, and storm drains.",
     helpline: "1533",
+    officialEmail: "comm@bbmp.gov.in",
+    officialWhatsApp: "919480685700",
+    officialWhatsAppDisplay: "+91 94806 85700",
     states: ["Karnataka"],
     districts: ["Bengaluru Urban"],
     tags: ["bengaluru", "bangalore", "streetlight", "road", "garbage", "drainage", "civic"],
@@ -173,6 +187,9 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official electricity portal for power outages, meter/billing issues, and electric line hazards in Bengaluru and surrounding districts.",
     helpline: "1912",
+    officialEmail: "helpline@bescom.co.in",
+    officialWhatsApp: "919449844640",
+    officialWhatsAppDisplay: "+91 94498 44640",
     states: ["Karnataka"],
     districts: ["Bengaluru Urban", "Bengaluru Rural", "Ramanagara", "Tumakuru", "Kolar", "Chikkaballapura"],
     tags: ["electricity", "power", "bill", "wire", "bengaluru"],
@@ -199,6 +216,8 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Direct civic portal for Mumbai drainage, water supply, potholes, street lights, and solid waste grievances.",
     helpline: "1916",
+    officialWhatsApp: "918999228999",
+    officialWhatsAppDisplay: "+91 89992 28999",
     states: ["Maharashtra"],
     districts: ["Mumbai City", "Mumbai Suburban"],
     tags: ["mumbai", "civic", "drainage", "water", "road", "streetlight"],
@@ -212,6 +231,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official electricity portal for power faults, high bills, meter reading disputes, and line safety across Maharashtra.",
     helpline: "1912 / 1800-212-3435",
+    officialEmail: "customercare@mahadiscom.in",
     states: ["Maharashtra"],
     tags: ["electricity", "power", "bill", "meter", "maharashtra"],
   },
@@ -225,6 +245,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     authorityScope: "Government of Kerala",
     description:
       "Official Chief Minister's Office grievance portal for local body, utility, and state government issues in Kerala.",
+    officialEmail: "chiefminister@kerala.gov.in",
     states: ["Kerala"],
     tags: ["kerala", "state", "civic", "government"],
   },

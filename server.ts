@@ -762,11 +762,46 @@ async function startServer() {
       const ai = getAiClient();
 
       const dictationPrompt = [
-        `Transcribe this Indian citizen voice recording in ${language} (high-accuracy Indian dialect & Smart Flow dictation).`,
+        `Transcribe this Indian citizen voice recording in ${language} (high-accuracy Indian dialect dictation).`,
         `Write clean, naturally punctuated sentences in ${language} script, accurately preserving Indian regional dialects, local street/area names, spoken English terms, and digits.`,
+        "Transcribe each spoken phrase strictly ONCE. Never repeat sentences, never output both the native script and an English translation, and never duplicate clauses.",
         "Automatically remove filler sounds (um, uh, ahh, stammering) and false starts while preserving 100% of the speaker's true facts.",
-        "Return ONLY the cleaned transcript text with no labels, quotes, or commentary. If there is only silence or noise with no intelligible speech, return an empty string.",
+        "Return ONLY the single cleaned transcript text with no labels, quotes, or commentary. If there is only silence or noise with no intelligible speech, return an empty string.",
       ].join("\n");
+
+      const deduplicateServerTranscript = (raw: string): string => {
+        const cleaned = cleanMultilineText(raw, 2500).replace(/\s+/g, " ").trim();
+        if (!cleaned) return "";
+        const norm = (s: string) =>
+          s
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const words = cleaned.split(" ");
+        if (words.length >= 4 && words.length % 2 === 0) {
+          const half = words.length / 2;
+          const a = words.slice(0, half).join(" ");
+          const b = words.slice(half).join(" ");
+          if (norm(a) === norm(b)) return a;
+        }
+
+        const sentences = cleaned
+          .split(/(?<=[.?!।])\s+|\n+/)
+          .map((s) => s.trim())
+          .filter(Boolean);
+        if (sentences.length <= 1) return cleaned;
+
+        const out: string[] = [];
+        for (const s of sentences) {
+          const cur = norm(s);
+          const prev = out.length > 0 ? norm(out[out.length - 1]) : "";
+          if (cur && cur === prev) continue;
+          out.push(s);
+        }
+        return out.join(" ");
+      };
 
       const response = await generateWithFailover(
         TRANSCRIBE_MODELS,
@@ -784,7 +819,7 @@ async function startServer() {
                 {
                   text:
                     model === "gemini-3.5-transcribe"
-                      ? `Transcribe this Indian speech recording accurately in ${language} (preserve regional dialect meaning, local place names, and numbers with clean punctuation and no filler words).`
+                      ? `Transcribe this Indian speech recording accurately in ${language} ONCE ONLY (preserve regional dialect meaning, local place names, and numbers; never repeat sentences or add a translation).`
                       : dictationPrompt,
                 },
               ],
@@ -796,7 +831,7 @@ async function startServer() {
         ATTEMPT_TIMEOUT_MS,
       );
 
-      const transcript = cleanMultilineText(response.text, 2500);
+      const transcript = deduplicateServerTranscript(response.text ?? "");
       res.json({ transcript, engine: "gemini-transcribe" });
     } catch (error) {
       console.error("[/api/transcribe-audio] error:", error);
@@ -1539,11 +1574,78 @@ async function startServer() {
   const distDir = path.resolve(__dirname, "dist");
 
   if (!isProd || !fs.existsSync(distDir)) {
+    process.env.DISABLE_HMR = "true";
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+        ws: false,
+      },
       appType: "spa",
     });
+
+    // Vite 8 still injects /@vite/client with a WebSocket connection even when hmr/ws are false.
+    // Serve a clean zero-WebSocket shim exporting the 5 client helpers (CSS + HMR no-ops).
+    const noHmrViteClient = `
+const sheetsMap = new Map();
+let lastInsertedStyle;
+export function updateStyle(id, content) {
+  let style = sheetsMap.get(id);
+  if (!style) {
+    style = document.createElement("style");
+    style.setAttribute("type", "text/css");
+    style.setAttribute("data-vite-dev-id", id);
+    style.textContent = content;
+    if (!lastInsertedStyle) {
+      document.head.appendChild(style);
+      setTimeout(() => { lastInsertedStyle = undefined; }, 0);
+    } else {
+      lastInsertedStyle.insertAdjacentElement("afterend", style);
+    }
+    lastInsertedStyle = style;
+  } else if (style.textContent !== content) {
+    style.textContent = content;
+  }
+  sheetsMap.set(id, style);
+}
+export function removeStyle(id) {
+  const style = sheetsMap.get(id);
+  if (style) {
+    document.head.removeChild(style);
+    sheetsMap.delete(id);
+  }
+}
+export function createHotContext() {
+  return {
+    data: {},
+    accept() {},
+    acceptExports() {},
+    dispose() {},
+    prune() {},
+    decline() {},
+    invalidate() {},
+    on() {},
+    off() {},
+    send() {},
+  };
+}
+export function injectQuery(url, queryToInject) {
+  if (!url || !queryToInject) return url;
+  const hashIndex = url.indexOf("#");
+  const hash = hashIndex >= 0 ? url.slice(hashIndex) : "";
+  const withoutHash = hashIndex >= 0 ? url.slice(0, hashIndex) : url;
+  const sep = withoutHash.includes("?") ? "&" : "?";
+  return withoutHash + sep + queryToInject + hash;
+}
+export class ErrorOverlay extends HTMLElement {}
+`.trim();
+
+    app.get("/@vite/client", (_req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.type("application/javascript").send(noHmrViteClient);
+    });
+
     app.use(vite.middlewares);
   } else {
     app.use(express.static(distDir));

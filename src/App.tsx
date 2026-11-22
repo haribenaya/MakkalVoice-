@@ -174,15 +174,29 @@ export default function App() {
   const voiceRecorder = useVoiceRecorder({
     language: form.language,
     onTranscript: (spokenText) => {
+      const cleanedSpoken = spokenText.trim();
+      if (!cleanedSpoken) {
+        setVoiceTarget(null);
+        return;
+      }
       if (voiceTargetRef.current === "answer") {
-        setAnswerInput((prev) => (prev.trim() ? `${prev.trim()} ${spokenText}` : spokenText));
+        setAnswerInput((prev) => {
+          const trimmedPrev = prev.trim();
+          if (!trimmedPrev) return cleanedSpoken;
+          if (trimmedPrev.endsWith(cleanedSpoken)) return prev;
+          return `${trimmedPrev} ${cleanedSpoken}`;
+        });
       } else {
-        setForm((prev) => ({
-          ...prev,
-          complaint: prev.complaint.trim()
-            ? `${prev.complaint.trim()} ${spokenText}`
-            : spokenText,
-        }));
+        setForm((prev) => {
+          const trimmedPrev = prev.complaint.trim();
+          if (trimmedPrev && trimmedPrev.endsWith(cleanedSpoken)) {
+            return prev;
+          }
+          return {
+            ...prev,
+            complaint: trimmedPrev ? `${trimmedPrev} ${cleanedSpoken}` : cleanedSpoken,
+          };
+        });
         setFieldErrors((prev) => (prev.complaint ? { ...prev, complaint: false } : prev));
       }
       setVoiceTarget(null);

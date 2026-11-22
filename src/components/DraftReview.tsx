@@ -15,12 +15,15 @@ import {
   FileDown,
   Globe,
   Mail,
+  MessageCircle,
   MessageSquare,
+  MinusCircle,
   Printer,
   RefreshCw,
   Share2,
   ShieldCheck,
 } from "lucide-react";
+import { getDirectSubmissionStrings } from "../data/directSubmissionTranslations";
 import type { InnovationStrings } from "../data/innovationTranslations";
 import { PORTAL_LANGUAGE_SUPPORT } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
@@ -32,7 +35,11 @@ import type {
   PortalGuidance,
 } from "../types";
 import { resolveEffectiveDistrict } from "../utils/api";
-import { downloadOfficialLetterPdf } from "../utils/mediaTools";
+import { downloadOfficialLetterPdf, shareOfficialLetterPdf } from "../utils/mediaTools";
+import {
+  DirectSubmitPermissionModal,
+  type DirectChannelType,
+} from "./DirectSubmitPermissionModal";
 import { EvidenceToolsPanel } from "./EvidenceToolsPanel";
 import { SubmissionGuideModal } from "./SubmissionGuideModal";
 
@@ -130,8 +137,10 @@ export function DraftReview({
   onSaveToTracker,
 }: DraftReviewProps) {
   const [copied, setCopied] = useState(false);
+  const [sharedPdfNotice, setSharedPdfNotice] = useState(false);
   const [copiedFieldKey, setCopiedFieldKey] = useState<string | null>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
+  const [directModalChannel, setDirectModalChannel] = useState<DirectChannelType | null>(null);
   const [checkedDocs, setCheckedDocs] = useState<Record<string, boolean>>({});
   const [checkedSteps, setCheckedSteps] = useState<Record<number, boolean>>({
     1: false,
@@ -139,6 +148,11 @@ export function DraftReview({
     3: false,
     4: false,
   });
+
+  const ds = getDirectSubmissionStrings(userLanguage);
+  const hasDirectEmail = Boolean(portalGuidance.primary.officialEmail);
+  const hasDirectWhatsApp = Boolean(portalGuidance.primary.officialWhatsApp);
+  const hasDirectChannel = hasDirectEmail || hasDirectWhatsApp;
 
   const combinedCopyText = subject.trim()
     ? `Subject: ${subject.trim()}\n\n${draftText.trim()}`
@@ -203,20 +217,18 @@ export function DraftReview({
     window.print();
   };
 
-  const shareMessage = `${combinedCopyText}\n\nOfficial Portal: ${portalGuidance.primary.name} (${portalGuidance.primary.url})`;
-  const whatsAppHref = `https://wa.me/?text=${encodeURIComponent(shareMessage.slice(0, 3500))}`;
-  const mailtoHref = `mailto:?subject=${encodeURIComponent(subject.trim() || "Public Grievance Letter")}&body=${encodeURIComponent(shareMessage.slice(0, 3500))}`;
-  const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-
-  const handleNativeShare = async () => {
-    if (!canNativeShare) return;
-    try {
-      await navigator.share({
-        title: subject.trim() || "MakkalVoice Official Letter",
-        text: shareMessage,
-      });
-    } catch {
-      // User dismissed share sheet
+  const handleShareFormalPaperPdf = async () => {
+    const result = await shareOfficialLetterPdf({
+      subject,
+      draftText,
+      portalName: portalGuidance.primary.name,
+      referenceNumber: form.referenceNumber.trim() || undefined,
+      attachments,
+      filename: "makkalvoice-complaint-paper.pdf",
+    });
+    if (result !== "cancelled") {
+      setSharedPdfNotice(true);
+      setTimeout(() => setSharedPdfNotice(false), 2600);
     }
   };
 
@@ -535,39 +547,24 @@ export function DraftReview({
 
               <span aria-hidden="true" className="text-slate-300">·</span>
 
-              <a
-                href={whatsAppHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-medium text-emerald-800 hover:text-emerald-950 transition-colors whitespace-nowrap"
+              <button
+                type="button"
+                onClick={() => void handleShareFormalPaperPdf()}
+                disabled={busy || !draftText.trim()}
+                className="inline-flex items-center gap-1.5 font-medium text-blue-700 hover:text-blue-900 transition-colors whitespace-nowrap disabled:opacity-50"
               >
-                <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {it.shareWhatsApp}
-              </a>
-
-              <span aria-hidden="true" className="text-slate-300">·</span>
-
-              <a
-                href={mailtoHref}
-                className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap"
-              >
-                <Mail className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                {it.shareEmail}
-              </a>
-
-              {canNativeShare && (
-                <>
-                  <span aria-hidden="true" className="text-slate-300">·</span>
-                  <button
-                    type="button"
-                    onClick={() => void handleNativeShare()}
-                    className="inline-flex items-center gap-1.5 font-medium text-slate-700 hover:text-slate-950 transition-colors whitespace-nowrap"
-                  >
+                {sharedPdfNotice ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-700 shrink-0" aria-hidden="true" />
+                    <span className="text-emerald-800">{ds.shareFormalPdfDone}</span>
+                  </>
+                ) : (
+                  <>
                     <Share2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                    {it.sharePacketNative}
-                  </button>
-                </>
-              )}
+                    <span>{ds.shareFormalPdfBtn}</span>
+                  </>
+                )}
+              </button>
 
               <span aria-hidden="true" className="text-slate-300">·</span>
 
@@ -665,6 +662,135 @@ export function DraftReview({
             </p>
           </div>
         )}
+
+        {/* Direct Department Submission Status (Always clearly shows Official Email & Official WhatsApp availability) */}
+        <div
+          className={`mt-5 p-4 sm:p-5 rounded-xl border space-y-4 ${
+            hasDirectChannel
+              ? "bg-emerald-50/50 border-emerald-200/90"
+              : "bg-slate-50/80 border-slate-200"
+          }`}
+        >
+          <div>
+            <p
+              className={`text-xs font-semibold ${
+                hasDirectChannel ? "text-emerald-800" : "text-slate-600"
+              }`}
+            >
+              {ds.cardKicker}
+            </p>
+            <h3 className="mt-1 font-display text-base font-bold text-slate-950">
+              {ds.cardTitle}
+            </h3>
+            <p className="mt-1 text-xs sm:text-sm text-slate-700 leading-relaxed">
+              {hasDirectChannel ? ds.cardSubtitle : ds.cardUnavailableSubtitle}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Official Email Status & Action */}
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+                    <Mail
+                      className={`w-4 h-4 shrink-0 ${hasDirectEmail ? "text-blue-700" : "text-slate-400"}`}
+                      aria-hidden="true"
+                    />
+                    {ds.availableEmailLabel}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-medium ${
+                      hasDirectEmail ? "text-emerald-700" : "text-slate-500"
+                    }`}
+                  >
+                    {hasDirectEmail ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <MinusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    )}
+                    {hasDirectEmail ? ds.availableStatusTag : ds.notAvailableStatusTag}
+                  </span>
+                </div>
+
+                {hasDirectEmail ? (
+                  <p className="mt-1.5 text-xs sm:text-sm font-mono font-semibold text-slate-950 break-all">
+                    {portalGuidance.primary.officialEmail}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {ds.notAvailableChannelNote}
+                  </p>
+                )}
+              </div>
+
+              {hasDirectEmail && (
+                <button
+                  type="button"
+                  onClick={() => setDirectModalChannel("email")}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors whitespace-nowrap min-h-[44px]"
+                >
+                  <Mail className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {ds.askPermissionEmailBtn}
+                </button>
+              )}
+            </div>
+
+            {/* Official WhatsApp Status & Action */}
+            <div className="p-3.5 rounded-xl bg-white border border-slate-200/90 flex flex-col justify-between gap-3">
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-900">
+                    <MessageCircle
+                      className={`w-4 h-4 shrink-0 ${hasDirectWhatsApp ? "text-emerald-700" : "text-slate-400"}`}
+                      aria-hidden="true"
+                    />
+                    {ds.availableWhatsAppLabel}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 text-xs font-medium ${
+                      hasDirectWhatsApp ? "text-emerald-700" : "text-slate-500"
+                    }`}
+                  >
+                    {hasDirectWhatsApp ? (
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <MinusCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    )}
+                    {hasDirectWhatsApp ? ds.availableStatusTag : ds.notAvailableStatusTag}
+                  </span>
+                </div>
+
+                {hasDirectWhatsApp ? (
+                  <p className="mt-1.5 text-xs sm:text-sm font-mono font-semibold tabular-nums text-slate-950">
+                    {portalGuidance.primary.officialWhatsAppDisplay ?? portalGuidance.primary.officialWhatsApp}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {ds.notAvailableChannelNote}
+                  </p>
+                )}
+              </div>
+
+              {hasDirectWhatsApp && (
+                <button
+                  type="button"
+                  onClick={() => setDirectModalChannel("whatsapp")}
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl transition-colors whitespace-nowrap min-h-[44px]"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" aria-hidden="true" />
+                  {ds.askPermissionWhatsAppBtn}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {hasDirectChannel && (
+            <p className="text-xs text-slate-600 leading-relaxed">
+              {ds.portalStillAvailableNote}
+            </p>
+          )}
+        </div>
 
         {/* Verified Portals Grid */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1090,6 +1216,28 @@ export function DraftReview({
         onDownloadDraft={handleDownloadTxt}
         onPortalOpened={() => setCheckedSteps((prev) => ({ ...prev, 4: true }))}
         onOpenAssistant={onOpenAssistant}
+      />
+
+      {/* Explicit Permission & Verification Modal for Official Email / Official WhatsApp */}
+      <DirectSubmitPermissionModal
+        open={directModalChannel !== null}
+        channel={directModalChannel ?? "email"}
+        ds={ds}
+        portalName={portalGuidance.primary.name}
+        recipientEmail={portalGuidance.primary.officialEmail}
+        recipientWhatsApp={portalGuidance.primary.officialWhatsApp}
+        recipientWhatsAppDisplay={portalGuidance.primary.officialWhatsAppDisplay}
+        initialSubject={subject}
+        initialBody={draftText}
+        isSavedToTracker={isSavedToTracker}
+        onSaveToTracker={onSaveToTracker}
+        onConfirmedSend={() => {
+          setCheckedSteps((prev) => ({ ...prev, 2: true, 4: true }));
+          if (!isSavedToTracker) {
+            onSaveToTracker();
+          }
+        }}
+        onClose={() => setDirectModalChannel(null)}
       />
     </div>
   );

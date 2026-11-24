@@ -17,17 +17,42 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = "gemini-3.1-flash-lite";
-const FAST_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
-const DRAFT_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
+const MODEL_NAME = "gemini-4-hydrogen";
+const FAST_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
+const DRAFT_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
 const TRANSCRIBE_MODELS = [
   "gemini-3.5-transcribe",
-  "gemini-3.1-flash-lite",
   "gemini-4-hydrogen",
+  "gemini-3.1-flash-lite",
 ] as const;
 const REQUEST_TIMEOUT_MS = 28_000;
-const ATTEMPT_TIMEOUT_MS = 16_000;
+const ATTEMPT_TIMEOUT_MS = 18_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
+
+// Per-model transient health cooldown so busy/rate-limited models are skipped immediately
+const modelCooldownUntil = new Map<string, number>();
+
+// Short TTL in-memory cache for identical idempotent AI requests (prevents duplicate quota spend on double-clicks)
+const aiResponseCache = new Map<string, { expiresAt: number; data: unknown }>();
+const AI_CACHE_TTL_MS = 60_000;
+
+function getCachedAiResponse<T>(key: string): T | null {
+  const entry = aiResponseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    aiResponseCache.delete(key);
+    return null;
+  }
+  return entry.data as T;
+}
+
+function setCachedAiResponse(key: string, data: unknown): void {
+  if (aiResponseCache.size >= 80) {
+    const oldestKey = aiResponseCache.keys().next().value;
+    if (oldestKey) aiResponseCache.delete(oldestKey);
+  }
+  aiResponseCache.set(key, { expiresAt: Date.now() + AI_CACHE_TTL_MS, data });
+}
 
 function thinkingConfigForModel(model: string) {
   if (model.includes("flash-lite")) {
@@ -272,101 +297,113 @@ function isRetryableGeminiError(error: unknown): boolean {
   );
 }
 
-async function runHedgedWave<T>(
-  models: readonly string[],
-  runForModel: (model: string) => Promise<T>,
-  attemptTimeoutMs: number,
-  hedgeDelayMs = 3500,
-): Promise<T> {
-  if (models.length === 0) {
-    throw new Error("No AI models configured.");
-  }
-  if (models.length === 1) {
-    return withTimeout(runForModel(models[0]), attemptTimeoutMs);
-  }
-
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    let remaining = models.length;
-    let lastError: unknown;
-    const timers: ReturnType<typeof setTimeout>[] = [];
-    const started = new Set<number>();
-
-    const cleanupTimers = () => {
-      for (const t of timers) clearTimeout(t);
-      timers.length = 0;
-    };
-
-    const launch = (idx: number) => {
-      if (settled || idx >= models.length || started.has(idx)) return;
-      started.add(idx);
-      const model = models[idx];
-      withTimeout(runForModel(model), attemptTimeoutMs)
-        .then((result) => {
-          if (settled) return;
-          settled = true;
-          cleanupTimers();
-          resolve(result);
-        })
-        .catch((err) => {
-          if (settled) return;
-          lastError = err;
-          const errMsg = String((err as Error)?.message ?? "");
-          console.warn(
-            `[MakkalVoice AI] hedged attempt (${model}) failed:`,
-            errMsg.slice(0, 180),
-          );
-          remaining -= 1;
-          // If this attempt failed quickly, immediately start the next unstarted backup
-          for (let next = idx + 1; next < models.length; next += 1) {
-            if (!started.has(next)) {
-              launch(next);
-              break;
-            }
-          }
-          if (remaining <= 0) {
-            settled = true;
-            cleanupTimers();
-            reject(lastError ?? new Error("All AI models failed to respond."));
-          }
-        });
-    };
-
-    // Start primary model immediately
-    launch(0);
-
-    // Schedule backup models as hedged parallel fallbacks if primary is slow
-    for (let i = 1; i < models.length; i += 1) {
-      const timer = setTimeout(() => launch(i), hedgeDelayMs * i);
-      timers.push(timer);
+function extractRetryAfterMs(error: unknown): number | null {
+  const msg = String((error as { message?: string })?.message ?? "");
+  const secMatch = msg.match(/retry\s*(?:in|after|delay["']?\s*[:=]\s*["']?)\s*(\d+(?:\.\d+)?)\s*s/i);
+  if (secMatch) {
+    const secs = Number(secMatch[1]);
+    if (Number.isFinite(secs) && secs > 0 && secs <= 20) {
+      return Math.ceil(secs * 1000);
     }
-  });
+  }
+  return null;
+}
+
+function isQuotaOrBusyError(error: unknown): boolean {
+  const err = error as { status?: number; message?: string };
+  const msg = String(err?.message ?? "");
+  return (
+    err?.status === 503 ||
+    err?.status === 429 ||
+    /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand|quota/i.test(msg)
+  );
+}
+
+function orderModelsByHealth(models: readonly string[]): string[] {
+  const now = Date.now();
+  const healthy: string[] = [];
+  const cooling: Array<{ model: string; until: number }> = [];
+
+  for (const model of models) {
+    const until = modelCooldownUntil.get(model) ?? 0;
+    if (until <= now) {
+      healthy.push(model);
+    } else {
+      cooling.push({ model, until });
+    }
+  }
+
+  cooling.sort((a, b) => a.until - b.until);
+  return [...healthy, ...cooling.map((c) => c.model)];
 }
 
 async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
   attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
-  rounds = 2,
+  rounds = 3,
 ): Promise<T> {
+  if (models.length === 0) {
+    throw new Error("No AI models configured.");
+  }
+
   let lastError: unknown;
-  for (let r = 0; r < rounds; r += 1) {
-    try {
-      return await runHedgedWave(models, runForModel, attemptTimeoutMs, r === 0 ? 3500 : 1500);
-    } catch (err) {
-      lastError = err;
-      const errMsg = String((err as Error)?.message ?? "");
-      if (
-        !isRetryableGeminiError(err) &&
-        !/INVALID_ARGUMENT|unsupported|not found/i.test(errMsg)
-      ) {
-        throw err;
-      }
-      if (r < rounds - 1) {
-        await new Promise((res) => setTimeout(res, 500));
+
+  for (let round = 0; round < rounds; round += 1) {
+    const ordered = orderModelsByHealth(models);
+    let suggestedDelayMs = 0;
+
+    for (const model of ordered) {
+      try {
+        const result = await withTimeout(runForModel(model), attemptTimeoutMs);
+        // Model succeeded: immediately clear any prior cooldown
+        modelCooldownUntil.delete(model);
+        return result;
+      } catch (err) {
+        lastError = err;
+        const errMsg = String((err as Error)?.message ?? "");
+        console.warn(
+          `[MakkalVoice AI] round ${round + 1}/${rounds} (${model}) failed:`,
+          errMsg.slice(0, 180),
+        );
+
+        // Immediately fail fast on auth / key errors (never retry invalid key)
+        if (
+          (err as { status?: number })?.status === 403 ||
+          /PERMISSION_DENIED|API_KEY_INVALID|MISSING_API_KEY/i.test(errMsg)
+        ) {
+          throw err;
+        }
+
+        // Cool down overloaded or rate-limited model so next model is used immediately
+        if (isQuotaOrBusyError(err)) {
+          const retryHint = extractRetryAfterMs(err);
+          const cooldownMs = retryHint ? Math.max(retryHint, 12_000) : 18_000;
+          modelCooldownUntil.set(model, Date.now() + cooldownMs);
+          if (retryHint && retryHint > suggestedDelayMs) {
+            suggestedDelayMs = retryHint;
+          }
+        }
+
+        // If error is non-retryable and not a model-compatibility error, propagate immediately
+        if (
+          !isRetryableGeminiError(err) &&
+          !/INVALID_ARGUMENT|unsupported|not found/i.test(errMsg)
+        ) {
+          throw err;
+        }
       }
     }
+
+    // All models failed in this round; wait with polite exponential backoff + jitter before next round
+    if (round < rounds - 1) {
+      const baseDelay = round === 0 ? 1200 : 2600;
+      const jitter = Math.floor(Math.random() * 400);
+      const waitMs = Math.min(Math.max(baseDelay + jitter, suggestedDelayMs), 5000);
+      await new Promise((res) => setTimeout(res, waitMs));
+    }
   }
+
   throw lastError ?? new Error("All AI models failed to respond.");
 }
 
@@ -856,6 +893,13 @@ async function startServer() {
         return;
       }
 
+      const cacheKey = `voice-understand:${language}:${complaint.toLowerCase()}`;
+      const cached = getCachedAiResponse<Record<string, unknown>>(cacheKey);
+      if (cached) {
+        res.json(cached);
+        return;
+      }
+
       const ai = getAiClient();
 
       const response = await generateWithFailover(
@@ -896,13 +940,15 @@ async function startServer() {
         (s) => s.toLowerCase() === cleanText(parsed.state, 80).toLowerCase(),
       );
 
-      res.json({
+      const payload = {
         category: normalizeCategory(parsed.category),
         state: matchedState ?? "",
         district: cleanText(parsed.district, 100),
         town: cleanText(parsed.town, 120),
         street: cleanText(parsed.street, 200),
-      });
+      };
+      setCachedAiResponse(cacheKey, payload);
+      res.json(payload);
     } catch (error) {
       console.error("[/api/voice-understand] error:", error);
       const mapped = mapGeminiError(error);

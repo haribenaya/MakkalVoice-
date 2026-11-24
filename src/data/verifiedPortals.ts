@@ -159,6 +159,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Official statewide portal for district administration, civic services, utilities, and government schemes in Karnataka.",
     helpline: "1902",
+    officialEmail: "janaspandana-ka@nic.in",
     states: ["Karnataka"],
     tags: ["karnataka", "state", "civic", "government"],
   },
@@ -204,6 +205,8 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     authorityScope: "Government of Maharashtra",
     description:
       "Official state grievance portal covering district offices, municipal bodies, utilities, and state schemes across Maharashtra.",
+    helpline: "1800-120-8040",
+    officialEmail: "grievances@maharashtra.gov.in",
     states: ["Maharashtra"],
     tags: ["maharashtra", "state", "civic", "government"],
   },
@@ -281,6 +284,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Direct municipal portal for Hyderabad roads, sanitation, street lights, and storm drains.",
     helpline: "040-21111111",
+    officialEmail: "commissioner-ghmc@gov.in",
     states: ["Telangana"],
     districts: ["Hyderabad"],
     tags: ["hyderabad", "civic", "road", "streetlight", "garbage", "drainage"],
@@ -305,6 +309,8 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     authorityScope: "Government of NCT of Delhi",
     description:
       "Official portal for civic, water, road, and Delhi government department grievances.",
+    helpline: "1031",
+    officialEmail: "pgms-delhi@gov.in",
     states: ["Delhi (NCT)"],
     tags: ["delhi", "state", "civic", "government"],
   },
@@ -316,6 +322,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     authorityScope: "Government of Gujarat",
     description:
       "Official citizen grievance platform for taluka, district, and state issues across Gujarat.",
+    officialEmail: "swagat@gujarat.gov.in",
     states: ["Gujarat"],
     tags: ["gujarat", "state", "civic", "government"],
   },
@@ -328,6 +335,7 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     description:
       "Centralized grievance redressal portal for civic, utility, and administrative issues across Rajasthan.",
     helpline: "181",
+    officialEmail: "sampark@rajasthan.gov.in",
     states: ["Rajasthan"],
     tags: ["rajasthan", "state", "civic", "government"],
   },
@@ -373,6 +381,8 @@ export const VERIFIED_PORTALS: Record<string, VerifiedPortalRecord> = {
     authorityScope: "Government of Odisha",
     description:
       "Unified public grievance registration and tracking platform for Odisha state departments.",
+    helpline: "155335",
+    officialEmail: "janasunani@odisha.gov.in",
     states: ["Odisha"],
     tags: ["odisha", "state", "civic", "government"],
   },

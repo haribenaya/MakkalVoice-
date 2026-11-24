@@ -64,47 +64,72 @@ export async function postApiJSON<T>(
   endpoint: string,
   payload: Record<string, unknown>,
 ): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE}/${endpoint}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch {
-    throw new ApiError(
-      "Could not connect to the server. Please check your connection and try again.",
-      "NETWORK_ERROR",
-      0,
-    );
-  }
+  const isRetryableEndpoint = endpoint !== "reverse-geocode";
+  const maxAttempts = isRetryableEndpoint ? 2 : 1;
 
-  let data: Record<string, unknown> = {};
-  try {
-    data = (await response.json()) as Record<string, unknown>;
-  } catch {
-    // Non-JSON response fallback
-  }
-
-  if (!response.ok) {
-    // Tier 2 Google Maps Demo Key Quota Detection
-    if (
-      response.status === 429 &&
-      (endpoint === "reverse-geocode" || data.code === "GMP_QUOTA_EXCEEDED")
-    ) {
-      window.dispatchEvent(new CustomEvent("gmp-quota-exceeded"));
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}/${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1400));
+        continue;
+      }
+      throw new ApiError(
+        "Could not connect to the server. Please check your connection and try again.",
+        "NETWORK_ERROR",
+        0,
+      );
     }
-    const serverMessage =
-      typeof data.error === "string" && data.error.trim()
-        ? data.error.trim()
-        : `Request failed with status ${response.status}. Please try again.`;
-    const code = typeof data.code === "string" ? data.code : undefined;
-    throw new ApiError(serverMessage, code, response.status);
+
+    let data: Record<string, unknown> = {};
+    try {
+      data = (await response.json()) as Record<string, unknown>;
+    } catch {
+      // Non-JSON response fallback
+    }
+
+    if (!response.ok) {
+      // Tier 2 Google Maps Demo Key Quota Detection
+      if (
+        response.status === 429 &&
+        (endpoint === "reverse-geocode" || data.code === "GMP_QUOTA_EXCEEDED")
+      ) {
+        window.dispatchEvent(new CustomEvent("gmp-quota-exceeded"));
+      }
+
+      const isTransientAiStatus =
+        isRetryableEndpoint &&
+        (response.status === 503 ||
+          response.status === 504 ||
+          response.status === 502 ||
+          response.status === 429);
+
+      if (isTransientAiStatus && attempt < maxAttempts) {
+        const delayMs = response.status === 429 ? 2800 : 1800;
+        await new Promise((r) => setTimeout(r, delayMs));
+        continue;
+      }
+
+      const serverMessage =
+        typeof data.error === "string" && data.error.trim()
+          ? data.error.trim()
+          : `Request failed with status ${response.status}. Please try again.`;
+      const code = typeof data.code === "string" ? data.code : undefined;
+      throw new ApiError(serverMessage, code, response.status);
+    }
+
+    return data as T;
   }
 
-  return data as T;
+  throw new ApiError("Unable to complete request right now. Please try again.", "AI_GENERIC", 502);
 }
 
 export async function fetchMapsApiKey(): Promise<string> {

@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import type { EvidenceAttachment } from "../types";
+import type { CoSignerEntry, EvidenceAttachment, SavedComplaintRecord } from "../types";
 
 export interface OfficialLetterPdfOptions {
   subject: string;
@@ -7,6 +7,7 @@ export interface OfficialLetterPdfOptions {
   portalName?: string;
   referenceNumber?: string;
   attachments?: EvidenceAttachment[];
+  coSigners?: CoSignerEntry[];
   filename?: string;
 }
 
@@ -14,6 +15,7 @@ export async function compressImageForPortal(
   file: File,
   maxDimension = 1600,
   targetMaxKb = 850,
+  watermarkText?: string,
 ): Promise<EvidenceAttachment> {
   const originalSizeKb = Math.max(1, Math.round(file.size / 1024));
 
@@ -46,6 +48,19 @@ export async function compressImageForPortal(
     ctx.fillRect(0, 0, width, height);
     ctx.drawImage(img, 0, 0, width, height);
 
+    const trimmedWatermark = watermarkText?.trim();
+    if (trimmedWatermark) {
+      const barHeight = Math.max(30, Math.round(height * 0.055));
+      const fontSize = Math.max(13, Math.min(24, Math.round(barHeight * 0.46)));
+      ctx.fillStyle = "rgba(15, 23, 42, 0.78)";
+      ctx.fillRect(0, height - barHeight, width, barHeight);
+      ctx.font = `600 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      ctx.fillStyle = "#f8fafc";
+      ctx.textBaseline = "middle";
+      ctx.fillText(trimmedWatermark, Math.max(12, Math.round(width * 0.02)), height - barHeight / 2, width - 24);
+      ctx.textBaseline = "alphabetic";
+    }
+
     let quality = 0.84;
     let dataUrl = canvas.toDataURL("image/jpeg", quality);
     let compressedSizeKb = Math.round((dataUrl.length * 0.75) / 1024);
@@ -66,6 +81,7 @@ export async function compressImageForPortal(
       compressedSizeKb: Math.max(1, compressedSizeKb),
       width,
       height,
+      watermarked: Boolean(trimmedWatermark),
     };
   } finally {
     URL.revokeObjectURL(imgUrl);
@@ -260,6 +276,7 @@ export function buildOfficialLetterPdfDoc(options: OfficialLetterPdfOptions): js
     portalName,
     referenceNumber,
     attachments = [],
+    coSigners = [],
   } = options;
 
   const doc = new jsPDF({
@@ -274,13 +291,27 @@ export function buildOfficialLetterPdfDoc(options: OfficialLetterPdfOptions): js
     year: "numeric",
   });
 
-  const combinedText = `${subject}\n${draftText}`;
+  const coSignersAppendix =
+    coSigners.length > 0
+      ? [
+          "",
+          "------------------------------------------------------------",
+          "JOINT CITIZEN CO-SIGNATORIES (AFFECTED RESIDENTS):",
+          ...coSigners.map(
+            (c, idx) =>
+              `${idx + 1}. ${c.name}${c.address ? ` — ${c.address}` : ""}`,
+          ),
+        ].join("\n")
+      : "";
+  const fullDraftText = coSignersAppendix ? `${draftText.trim()}\n${coSignersAppendix}` : draftText;
+
+  const combinedText = `${subject}\n${fullDraftText}`;
   if (hasNonLatinCharacters(combinedText)) {
     renderUnicodePaperToPdf(
       doc,
       "FORMAL PUBLIC GRIEVANCE / APPLICATION",
       subject,
-      draftText,
+      fullDraftText,
       dateStr,
       portalName,
       referenceNumber,
@@ -358,7 +389,7 @@ export function buildOfficialLetterPdfDoc(options: OfficialLetterPdfOptions): js
     doc.setFont("times", "normal");
     doc.setFontSize(11.5);
     doc.setTextColor(15, 23, 42);
-    const paragraphs = draftText.split("\n");
+    const paragraphs = fullDraftText.split("\n");
     for (const para of paragraphs) {
       if (!para.trim()) {
         y += 4.2;
@@ -456,3 +487,82 @@ export async function shareOfficialLetterPdf(
   doc.save(filename);
   return "downloaded";
 }
+
+function formatIcsDate(isoDate: string): string {
+  const clean = isoDate.replace(/-/g, "");
+  return /^\d{8}$/.test(clean) ? clean : new Date().toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+function nextDayIso(isoDate: string): string {
+  const d = new Date(`${isoDate}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return formatIcsDate(isoDate);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10).replace(/-/g, "");
+}
+
+export function buildGoogleCalendarReminderUrl(record: SavedComplaintRecord): string {
+  const start = formatIcsDate(record.reminderDate);
+  const end = nextDayIso(record.reminderDate);
+  const title = `Follow-Up: ${record.subject}`.slice(0, 120);
+  const details = [
+    `Portal: ${record.portalName}`,
+    record.portalUrl ? `URL: ${record.portalUrl}` : "",
+    record.trackingId ? `Tracking ID: ${record.trackingId}` : "Tracking ID: Pending",
+    `Filed Date: ${record.createdAt}`,
+    "Action: Check complaint status on the official portal. If unresolved, file an Escalation or RTI Status Inquiry via MakkalVoice.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${start}/${end}`,
+    details,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+export function downloadFollowUpCalendarIcs(record: SavedComplaintRecord): void {
+  const start = formatIcsDate(record.reminderDate);
+  const end = nextDayIso(record.reminderDate);
+  const escapeIcs = (s: string) =>
+    s.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/,/g, "\\,").replace(/;/g, "\\;");
+
+  const summary = escapeIcs(`Grievance Follow-Up: ${record.subject}`);
+  const description = escapeIcs(
+    [
+      `Portal: ${record.portalName}`,
+      record.portalUrl ? `Portal URL: ${record.portalUrl}` : "",
+      record.trackingId ? `Tracking ID: ${record.trackingId}` : "Tracking ID: Not entered yet",
+      `Filed Date: ${record.createdAt}`,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//MakkalVoice//Citizen Tracker//EN",
+    "BEGIN:VEVENT",
+    `UID:makkalvoice-${record.id}@makkalvoice`,
+    `DTSTART;VALUE=DATE:${start}`,
+    `DTEND;VALUE=DATE:${end}`,
+    `SUMMARY:${summary}`,
+    `DESCRIPTION:${description}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `makkalvoice-followup-${record.reminderDate || "reminder"}.ics`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+

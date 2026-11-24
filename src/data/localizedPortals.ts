@@ -572,13 +572,15 @@ export function getLocalizedSampleLabel(index: number, language: string, fallbac
   return SAMPLE_LABELS_BY_LANG[language]?.[index] ?? fallback;
 }
 
-// Localized fallback document checklist when AI docs aren't returned yet
+// Localized fallback document checklist across all 12 non-English Indian languages
 export function getLocalizedFallbackDocs(
   category: ComplaintCategory,
   language: string,
 ): DocumentChecklistItem[] | null {
-  if (language === "Tamil") {
-    return [
+  const isConsumer = category === "Consumer Complaints";
+
+  const byLang: Record<string, DocumentChecklistItem[]> = {
+    Tamil: [
       {
         id: "doc-ta-1",
         title: "பிரச்சனை உள்ள இடத்தின் தெளிவான புகைப்படம் (1–2 படங்கள்)",
@@ -587,10 +589,9 @@ export function getLocalizedFallbackDocs(
       },
       {
         id: "doc-ta-2",
-        title:
-          category === "Consumer Complaints"
-            ? "கொள்முதல் ரசீது / பில் நகல்"
-            : "சம்பந்தப்பட்ட பில், நுகர்வோர் எண் அல்லது விண்ணப்ப எண்",
+        title: isConsumer
+          ? "கொள்முதல் ரசீது / பில் நகல்"
+          : "சம்பந்தப்பட்ட பில், நுகர்வோர் எண் அல்லது விண்ணப்ப எண்",
         detail: "அதிகாரிகள் உங்கள் புகாரை உடனடியாகக் கண்டறிய உதவும்.",
         mandatory: true,
       },
@@ -606,10 +607,8 @@ export function getLocalizedFallbackDocs(
         detail: "இருந்தால் மட்டும் இணைக்கவும்.",
         mandatory: false,
       },
-    ];
-  }
-  if (language === "Hindi") {
-    return [
+    ],
+    Hindi: [
       {
         id: "doc-hi-1",
         title: "समस्या वाले स्थान की स्पष्ट फ़ोटो (1–2 फ़ोटो)",
@@ -618,10 +617,9 @@ export function getLocalizedFallbackDocs(
       },
       {
         id: "doc-hi-2",
-        title:
-          category === "Consumer Complaints"
-            ? "खरीद का बिल या रसीद"
-            : "संबंधित बिल, उपभोक्ता संख्या या आवेदन संख्या",
+        title: isConsumer
+          ? "खरीद का बिल या रसीद"
+          : "संबंधित बिल, उपभोक्ता संख्या या आवेदन संख्या",
         detail: "अधिकारी आपकी शिकायत तुरंत ट्रैक कर सकेंगे।",
         mandatory: true,
       },
@@ -637,7 +635,288 @@ export function getLocalizedFallbackDocs(
         detail: "केवल उपलब्ध होने पर जोड़ें।",
         mandatory: false,
       },
-    ];
-  }
-  return null;
+    ],
+    Telugu: [
+      {
+        id: "doc-te-1",
+        title: "సమస్య ఉన్న ప్రదేశం యొక్క స్పష్టమైన ఫోటో (1–2 ఫోటోలు)",
+        detail: "సమీప గుర్తు కనిపించేలా JPG/PNG ఫోటో (2 MB లోపు).",
+        mandatory: true,
+      },
+      {
+        id: "doc-te-2",
+        title: isConsumer
+          ? "కొనుగోలు బిల్లు లేదా రసీదు కాపీ"
+          : "సంబంధిత బిల్లు, వినియోగదారు సంఖ్య లేదా దరఖాస్తు సంఖ్య",
+        detail: "అధికారులు మీ ఫిర్యాదును త్వరగా గుర్తించడానికి సహాయపడుతుంది.",
+        mandatory: true,
+      },
+      {
+        id: "doc-te-3",
+        title: "OTP కోసం మొబైల్ నంబర్ & ప్రాథమిక గుర్తింపు కార్డు",
+        detail: "ప్రభుత్వ పోర్టల్‌లో లాగిన్ కావడానికి మొబైల్ OTP అవసరం.",
+        mandatory: true,
+      },
+      {
+        id: "doc-te-4",
+        title: "మునుపటి ఫిర్యాదు సంఖ్య (ఇంతకుముందు నమోదు చేసి ఉంటే)",
+        detail: "ఉంటే మాత్రమే జత చేయండి.",
+        mandatory: false,
+      },
+    ],
+    Kannada: [
+      {
+        id: "doc-kn-1",
+        title: "ಸಮಸ್ಯೆ ಇರುವ ಸ್ಥಳದ ಸ್ಪಷ್ಟ ಫೋಟೋ (1–2 ಫೋಟೋಗಳು)",
+        detail: "ಹತ್ತಿರದ ಗುರುತು ಕಾಣಿಸುವ JPG/PNG ಫೋಟೋ (2 MB ಒಳಗೆ).",
+        mandatory: true,
+      },
+      {
+        id: "doc-kn-2",
+        title: isConsumer
+          ? "ಖರೀದಿ ರಸೀದಿ ಅಥವಾ ಬಿಲ್ ಪ್ರತಿ"
+          : "ಸಂಬಂಧಿತ ಬಿಲ್, ಗ್ರಾಹಕ ಸಂಖ್ಯೆ ಅಥವಾ ಅರ್ಜಿ ಸಂಖ್ಯೆ",
+        detail: "ಅಧಿಕಾರಿಗಳು ನಿಮ್ಮ ದೂರನ್ನು ತಕ್ಷಣ ಪತ್ತೆಹಚ್ಚಲು ಸಹಾಯ ಮಾಡುತ್ತದೆ.",
+        mandatory: true,
+      },
+      {
+        id: "doc-kn-3",
+        title: "OTP ಗಾಗಿ ಮೊಬೈಲ್ ಸಂಖ್ಯೆ ಮತ್ತು ಮೂಲ ಗುರುತಿನ ಚೀಟಿ",
+        detail: "ಸರ್ಕಾರಿ ಪೋರ್ಟಲ್‌ನಲ್ಲಿ ಲಾಗಿನ್ ಆಗಲು ಮೊಬೈಲ್ OTP ಅಗತ್ಯವಿದೆ.",
+        mandatory: true,
+      },
+      {
+        id: "doc-kn-4",
+        title: "ಹಿಂದಿನ ದೂರು ಸಂಖ್ಯೆ (ಈಗಾಗಲೇ ಸಲ್ಲಿಸಿದ್ದರೆ)",
+        detail: "ಲಭ್ಯವಿದ್ದರೆ ಮಾತ್ರ ಲಗತ್ತಿಸಿ.",
+        mandatory: false,
+      },
+    ],
+    Malayalam: [
+      {
+        id: "doc-ml-1",
+        title: "പ്രശ്നമുള്ള സ്ഥലത്തിന്റെ വ്യക്തമായ ഫോട്ടോ (1–2 എണ്ണം)",
+        detail: "സമീപത്തെ അടയാളം കാണുന്ന JPG/PNG ഫോട്ടോ (2 MB-യിൽ താഴെ).",
+        mandatory: true,
+      },
+      {
+        id: "doc-ml-2",
+        title: isConsumer
+          ? "വാങ്ങിയ ബിൽ അല്ലെങ്കിൽ രസീത് പകർപ്പ്"
+          : "ബന്ധപ്പെട്ട ബിൽ, ഉപഭോക്തൃ നമ്പർ അല്ലെങ്കിൽ അപേക്ഷാ നമ്പർ",
+        detail: "ഉദ്യോഗസ്ഥർക്ക് നിങ്ങളുടെ പരാതി വേഗത്തിൽ കണ്ടെത്താൻ സഹായിക്കും.",
+        mandatory: true,
+      },
+      {
+        id: "doc-ml-3",
+        title: "OTP ലഭിക്കാനുള്ള മൊബൈൽ നമ്പറും തിരിച്ചറിയൽ രേഖയും",
+        detail: "സർക്കാർ പോർട്ടലിൽ ലോഗിൻ ചെയ്യാൻ മൊബൈൽ OTP ആവശ്യമാണ്.",
+        mandatory: true,
+      },
+      {
+        id: "doc-ml-4",
+        title: "മുൻ പരാതി നമ്പർ (മുമ്പ് നൽകിയിട്ടുണ്ടെങ്കിൽ)",
+        detail: "ലഭ്യമാണെങ്കിൽ മാത്രം ചേർക്കുക.",
+        mandatory: false,
+      },
+    ],
+    Bengali: [
+      {
+        id: "doc-bn-1",
+        title: "সমস্যার স্থানের স্পষ্ট ছবি (১–২টি ছবি)",
+        detail: "আশেপাশের চিহ্নসহ JPG/PNG ছবি (২ MB-এর কম)।",
+        mandatory: true,
+      },
+      {
+        id: "doc-bn-2",
+        title: isConsumer
+          ? "ক্রয়ের রসিদ বা বিলের কপি"
+          : "সংশ্লিষ্ট বিল, কনজিউমার নম্বর বা আবেদন নম্বর",
+        detail: "কর্মকর্তারা দ্রুত আপনার অভিযোগ শনাক্ত করতে পারবেন।",
+        mandatory: true,
+      },
+      {
+        id: "doc-bn-3",
+        title: "OTP-এর জন্য সক্রিয় মোবাইল নম্বর ও পরিচয়পত্র",
+        detail: "সরকারি পোর্টালে লগইন করতে মোবাইল OTP প্রয়োজন।",
+        mandatory: true,
+      },
+      {
+        id: "doc-bn-4",
+        title: "পূর্ববর্তী অভিযোগ নম্বর (আগে অভিযোগ করে থাকলে)",
+        detail: "থাকলে কেবল তখনই সংযুক্ত করুন।",
+        mandatory: false,
+      },
+    ],
+    Marathi: [
+      {
+        id: "doc-mr-1",
+        title: "समस्येच्या ठिकाणाचा स्पष्ट फोटो (१–२ फोटो)",
+        detail: "जवळच्या खुणेसह JPG/PNG फोटो (२ MB पेक्षा कमी).",
+        mandatory: true,
+      },
+      {
+        id: "doc-mr-2",
+        title: isConsumer
+          ? "खरेदीची पावती किंवा बिलाची प्रत"
+          : "संबंधित बिल, ग्राहक क्रमांक किंवा अर्ज क्रमांक",
+        detail: "अधिकाऱ्यांना तुमची तक्रार त्वरित शोधण्यास मदत होते.",
+        mandatory: true,
+      },
+      {
+        id: "doc-mr-3",
+        title: "OTP साठी सक्रिय मोबाईल क्रमांक आणि ओळखपत्र",
+        detail: "सरकारी पोर्टलवर लॉगिन करण्यासाठी मोबाईल OTP आवश्यक आहे.",
+        mandatory: true,
+      },
+      {
+        id: "doc-mr-4",
+        title: "मागील तक्रार क्रमांक (आधी तक्रार केली असल्यास)",
+        detail: "उपलब्ध असल्यासच जोडा.",
+        mandatory: false,
+      },
+    ],
+    Gujarati: [
+      {
+        id: "doc-gu-1",
+        title: "સમસ્યાના સ્થળનો સ્પષ્ટ ફોટો (૧–૨ ફોટા)",
+        detail: "નજીકની ઓળખ સાથે JPG/PNG ફોટો (૨ MB થી ઓછો).",
+        mandatory: true,
+      },
+      {
+        id: "doc-gu-2",
+        title: isConsumer
+          ? "ખરીદીની રસીદ અથવા બિલની નકલ"
+          : "સંબંધિત બિલ, ગ્રાહક નંબર અથવા અરજી નંબર",
+        detail: "અધિકારીઓ તમારી ફરિયાદ તરત શોધી શકશે.",
+        mandatory: true,
+      },
+      {
+        id: "doc-gu-3",
+        title: "OTP માટે સક્રિય મોબાઇલ નંબર અને ઓળખપત્ર",
+        detail: "સરકારી પોર્ટલ પર લોગિન માટે મોબાઇલ OTP જરૂરી છે.",
+        mandatory: true,
+      },
+      {
+        id: "doc-gu-4",
+        title: "અગાઉનો ફરિયાદ નંબર (જો પહેલાં નોંધાવી હોય તો)",
+        detail: "ઉપલબ્ધ હોય તો જ જોડો.",
+        mandatory: false,
+      },
+    ],
+    Punjabi: [
+      {
+        id: "doc-pa-1",
+        title: "ਸਮੱਸਿਆ ਵਾਲੀ ਥਾਂ ਦੀ ਸਾਫ਼ ਫ਼ੋਟੋ (1–2 ਫ਼ੋਟੋਆਂ)",
+        detail: "ਨੇੜਲੀ ਪਛਾਣ ਸਮੇਤ JPG/PNG ਫ਼ੋਟੋ (2 MB ਤੋਂ ਘੱਟ)।",
+        mandatory: true,
+      },
+      {
+        id: "doc-pa-2",
+        title: isConsumer
+          ? "ਖਰੀਦ ਦਾ ਬਿੱਲ ਜਾਂ ਰਸੀਦ ਦੀ ਕਾਪੀ"
+          : "ਸੰਬੰਧਿਤ ਬਿੱਲ, ਖਪਤਕਾਰ ਨੰਬਰ ਜਾਂ ਅਰਜ਼ੀ ਨੰਬਰ",
+        detail: "ਅਧਿਕਾਰੀਆਂ ਨੂੰ ਤੁਹਾਡੀ ਸ਼ਿਕਾਇਤ ਤੁਰੰਤ ਲੱਭਣ ਵਿੱਚ ਮਦਦ ਮਿਲਦੀ ਹੈ।",
+        mandatory: true,
+      },
+      {
+        id: "doc-pa-3",
+        title: "OTP ਲਈ ਸਰਗਰਮ ਮੋਬਾਈਲ ਨੰਬਰ ਅਤੇ ਪਛਾਣ ਪੱਤਰ",
+        detail: "ਸਰਕਾਰੀ ਪੋਰਟਲ 'ਤੇ ਲੌਗਇਨ ਕਰਨ ਲਈ ਮੋਬਾਈਲ OTP ਜ਼ਰੂਰੀ ਹੈ।",
+        mandatory: true,
+      },
+      {
+        id: "doc-pa-4",
+        title: "ਪਿਛਲਾ ਸ਼ਿਕਾਇਤ ਨੰਬਰ (ਜੇ ਪਹਿਲਾਂ ਦਰਜ ਕੀਤੀ ਹੋਵੇ)",
+        detail: "ਸਿਰਫ਼ ਉਪਲਬਧ ਹੋਣ 'ਤੇ ਹੀ ਨੱਥੀ ਕਰੋ।",
+        mandatory: false,
+      },
+    ],
+    Odia: [
+      {
+        id: "doc-or-1",
+        title: "ସମସ୍ୟା ସ୍ଥାନର ସ୍ପଷ୍ଟ ଫଟୋ (୧–୨ଟି ଫଟୋ)",
+        detail: "ନିକଟସ୍ଥ ଚିହ୍ନ ସହିତ JPG/PNG ଫଟୋ (୨ MB ରୁ କମ୍)।",
+        mandatory: true,
+      },
+      {
+        id: "doc-or-2",
+        title: isConsumer
+          ? "କିଣିବା ବିଲ୍ କିମ୍ବା ରସିଦ୍ ନକଲ"
+          : "ସମ୍ପୃକ୍ତ ବିଲ୍, ଗ୍ରାହକ ନମ୍ବର କିମ୍ବା ଆବେଦନ ନମ୍ବର",
+        detail: "ଅଧିକାରୀମାନେ ଆପଣଙ୍କ ଅଭିଯୋଗ ଶୀଘ୍ର ଚିହ୍ନଟ କରିପାରିବେ।",
+        mandatory: true,
+      },
+      {
+        id: "doc-or-3",
+        title: "OTP ପାଇଁ ସକ୍ରିୟ ମୋବାଇଲ୍ ନମ୍ବର ଏବଂ ପରିଚୟ ପତ୍ର",
+        detail: "ସରକାରୀ ପୋର୍ଟାଲ୍‌ରେ ଲଗଇନ୍ ପାଇଁ ମୋବାଇଲ୍ OTP ଆବଶ୍ୟକ।",
+        mandatory: true,
+      },
+      {
+        id: "doc-or-4",
+        title: "ପୂର୍ବ ଅଭିଯୋଗ ନମ୍ବର (ଯଦି ଆଗରୁ ଦାଖଲ କରିଥାନ୍ତି)",
+        detail: "କେବଳ ଉପଲବ୍ଧ ଥିଲେ ଯୋଡ଼ନ୍ତୁ।",
+        mandatory: false,
+      },
+    ],
+    Assamese: [
+      {
+        id: "doc-as-1",
+        title: "সমস্যা থকা ঠাইৰ স্পষ্ট ফটো (১–২খন ফটো)",
+        detail: "ওচৰৰ চিনসহ JPG/PNG ফটো (২ MB-তকৈ কম)।",
+        mandatory: true,
+      },
+      {
+        id: "doc-as-2",
+        title: isConsumer
+          ? "ক্ৰয়ৰ ৰচিদ বা বিলৰ প্ৰতিলিপি"
+          : "সংশ্লিষ্ট বিল, গ্ৰাহক নম্বৰ বা আবেদন নম্বৰ",
+        detail: "বিষয়াসকলে আপোনাৰ অভিযোগ তৎক্ষণাত বিচাৰি উলিয়াব পাৰিব।",
+        mandatory: true,
+      },
+      {
+        id: "doc-as-3",
+        title: "OTP-ৰ বাবে সক্ৰিয় ম'বাইল নম্বৰ আৰু পৰিচয়পত্ৰ",
+        detail: "চৰকাৰী পৰ্টেলত লগইন কৰিবলৈ ম'বাইল OTP প্ৰয়োজন।",
+        mandatory: true,
+      },
+      {
+        id: "doc-as-4",
+        title: "পূৰ্বৰ অভিযোগ নম্বৰ (যদি আগতে দাখিল কৰিছিল)",
+        detail: "থাকিলেহে সংলগ্ন কৰক।",
+        mandatory: false,
+      },
+    ],
+    Urdu: [
+      {
+        id: "doc-ur-1",
+        title: "مسئلے والی جگہ کی واضح تصویر (1 تا 2 تصاویر)",
+        detail: "قریبی نشانی کے ساتھ JPG/PNG تصویر (2 MB سے کم)۔",
+        mandatory: true,
+      },
+      {
+        id: "doc-ur-2",
+        title: isConsumer
+          ? "خریداری کا بل یا رسید کی کاپی"
+          : "متعلقہ بل، صارف نمبر یا درخواست نمبر",
+        detail: "افسران کو آپ کی شکایت فوراً تلاش کرنے میں مدد ملتی ہے۔",
+        mandatory: true,
+      },
+      {
+        id: "doc-ur-3",
+        title: "OTP کے لیے فعال موبائل نمبر اور شناختی کارڈ",
+        detail: "سرکاری پورٹل پر لاگ ان کے لیے موبائل OTP ضروری ہے۔",
+        mandatory: true,
+      },
+      {
+        id: "doc-ur-4",
+        title: "پچھلا شکایت نمبر (اگر پہلے درج کرائی ہو)",
+        detail: "صرف دستیاب ہونے پر منسلک کریں۔",
+        mandatory: false,
+      },
+    ],
+  };
+
+  return byLang[language] ?? null;
 }

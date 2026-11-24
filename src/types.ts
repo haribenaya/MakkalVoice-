@@ -73,6 +73,19 @@ export interface EvidenceAttachment {
   compressedSizeKb: number;
   width: number;
   height: number;
+  watermarked?: boolean;
+}
+
+export interface CoSignerEntry {
+  id: string;
+  name: string;
+  address: string;
+}
+
+export interface QueuedOfflineComplaint {
+  id: string;
+  queuedAt: string;
+  form: ComplaintFormState;
 }
 
 export type SavedComplaintStatus = "drafted" | "submitted" | "followup_due" | "resolved";

@@ -241,6 +241,38 @@ function buildFallbackButtonGuide(uiLanguage: string) {
       { englishLabel: "Upload Attachment / Document", localMeaning: "ફોટો અથવા બિલ અપલોડ કરો" },
       { englishLabel: "Submit", localMeaning: "ફરિયાદ સબમિટ કરો" },
     ],
+    Punjabi: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "ਨਵੀਂ ਸ਼ਿਕਾਇਤ ਦਰਜ ਕਰੋ" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "ਆਪਣੇ ਮੋਬਾਈਲ 'ਤੇ ਆਇਆ OTP ਦਰਜ ਕਰੋ" },
+      { englishLabel: "Select Department / Category", localMeaning: "ਸੰਬੰਧਿਤ ਸਰਕਾਰੀ ਵਿਭਾਗ ਚੁਣੋ" },
+      { englishLabel: "Grievance Description", localMeaning: "ਕਾਪੀ ਕੀਤਾ ਸ਼ਿਕਾਇਤ ਪੱਤਰ ਇੱਥੇ ਪੇਸਟ ਕਰੋ" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ਫ਼ੋਟੋ ਜਾਂ ਬਿੱਲ ਅਪਲੋਡ ਕਰੋ" },
+      { englishLabel: "Submit", localMeaning: "ਸ਼ਿਕਾਇਤ ਅੰਤਿਮ ਰੂਪ ਵਿੱਚ ਜਮ੍ਹਾਂ ਕਰੋ" },
+    ],
+    Odia: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "ନୂତନ ଅଭିଯୋଗ ପଞ୍ଜୀକରଣ କରନ୍ତୁ" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "ଆପଣଙ୍କ ମୋବାଇଲ୍‌କୁ ଆସିଥିବା OTP ଦିଅନ୍ତୁ" },
+      { englishLabel: "Select Department / Category", localMeaning: "ସମ୍ପୃକ୍ତ ସରକାରୀ ବିଭାଗ ବାଛନ୍ତୁ" },
+      { englishLabel: "Grievance Description", localMeaning: "କପି ହୋଇଥିବା ଅଭିଯୋଗ ପତ୍ର ଏଠାରେ ପେଷ୍ଟ କରନ୍ତୁ" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ଫଟୋ କିମ୍ବା ବିଲ୍ ଅପଲୋଡ୍ କରନ୍ତୁ" },
+      { englishLabel: "Submit", localMeaning: "ଅଭିଯୋଗ ଚୂଡ଼ାନ୍ତ ଭାବରେ ଦାଖଲ କରନ୍ତୁ" },
+    ],
+    Assamese: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "নতুন অভিযোগ পঞ্জীয়ন কৰক" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "আপোনাৰ ম'বাইলত অহা OTP দিয়ক" },
+      { englishLabel: "Select Department / Category", localMeaning: "সংশ্লিষ্ট চৰকাৰী বিভাগ বাছনি কৰক" },
+      { englishLabel: "Grievance Description", localMeaning: "কপি কৰা অভিযোগ পত্ৰ ইয়াত পেষ্ট কৰক" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "ফটো বা বিল আপলোড কৰক" },
+      { englishLabel: "Submit", localMeaning: "অভিযোগ চূড়ান্তভাৱে দাখিল কৰক" },
+    ],
+    Urdu: [
+      { englishLabel: "Register / Lodge Grievance", localMeaning: "نئی شکایت درج کریں" },
+      { englishLabel: "Mobile OTP Verification", localMeaning: "اپنے موبائل پر آنے والا OTP درج کریں" },
+      { englishLabel: "Select Department / Category", localMeaning: "متعلقہ سرکاری محکمہ منتخب کریں" },
+      { englishLabel: "Grievance Description", localMeaning: "کاپی کیا ہوا شکایت نامہ یہاں پیسٹ کریں" },
+      { englishLabel: "Upload Attachment / Document", localMeaning: "تصویر یا بل اپ لوڈ کریں" },
+      { englishLabel: "Submit", localMeaning: "شکایت حتمی طور پر جمع کریں" },
+    ],
   };
 
   return (

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -18,17 +18,25 @@ import {
   MessageCircle,
   MessageSquare,
   MinusCircle,
+  Plus,
   Printer,
   RefreshCw,
   Share2,
   ShieldCheck,
+  Trash2,
+  Users,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { getDashboardExtrasStrings } from "../data/dashboardExtrasTranslations";
 import { getDirectSubmissionStrings } from "../data/directSubmissionTranslations";
 import type { InnovationStrings } from "../data/innovationTranslations";
+import { LANGUAGES } from "../data/languages";
 import { PORTAL_LANGUAGE_SUPPORT } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
 import type {
+  CoSignerEntry,
   ComplaintFormState,
   DraftResponse,
   EvidenceAttachment,
@@ -64,6 +72,8 @@ interface DraftReviewProps {
   onOpenAssistant: (presetQuestion?: string) => void;
   attachments: EvidenceAttachment[];
   onAttachmentsChange: (next: EvidenceAttachment[]) => void;
+  coSigners: CoSignerEntry[];
+  onCoSignersChange: (next: CoSignerEntry[]) => void;
   isSavedToTracker: boolean;
   onSaveToTracker: () => void;
 }
@@ -133,11 +143,16 @@ export function DraftReview({
   onOpenAssistant,
   attachments,
   onAttachmentsChange,
+  coSigners,
+  onCoSignersChange,
   isSavedToTracker,
   onSaveToTracker,
 }: DraftReviewProps) {
   const [copied, setCopied] = useState(false);
   const [sharedPdfNotice, setSharedPdfNotice] = useState(false);
+  const [isReadingDraft, setIsReadingDraft] = useState(false);
+  const [coSignerName, setCoSignerName] = useState("");
+  const [coSignerAddress, setCoSignerAddress] = useState("");
   const [copiedFieldKey, setCopiedFieldKey] = useState<string | null>(null);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [directModalChannel, setDirectModalChannel] = useState<DirectChannelType | null>(null);
@@ -150,9 +165,59 @@ export function DraftReview({
   });
 
   const ds = getDirectSubmissionStrings(userLanguage);
+  const dx = getDashboardExtrasStrings(userLanguage);
+  const userNativeLangLabel =
+    LANGUAGES.find((l) => l.name === userLanguage)?.nativeLabel ?? userLanguage;
   const hasDirectEmail = Boolean(portalGuidance.primary.officialEmail);
   const hasDirectWhatsApp = Boolean(portalGuidance.primary.officialWhatsApp);
   const hasDirectChannel = hasDirectEmail || hasDirectWhatsApp;
+
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const handleToggleReadDraft = () => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+    if (isReadingDraft) {
+      window.speechSynthesis.cancel();
+      setIsReadingDraft(false);
+      return;
+    }
+    const textToSpeak = `${subject.trim()}. ${draftText.trim()}`.trim();
+    if (!textToSpeak) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(textToSpeak);
+    const targetLangOption = LANGUAGES.find((l) => l.name === draftLanguage);
+    utterance.lang = targetLangOption?.locale ?? "en-IN";
+    utterance.rate = 0.94;
+    utterance.onend = () => setIsReadingDraft(false);
+    utterance.onerror = () => setIsReadingDraft(false);
+    setIsReadingDraft(true);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleAddCoSigner = () => {
+    const cleanName = coSignerName.trim();
+    if (!cleanName) return;
+    onCoSignersChange([
+      ...coSigners,
+      {
+        id: `cs-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        name: cleanName,
+        address: coSignerAddress.trim(),
+      },
+    ]);
+    setCoSignerName("");
+    setCoSignerAddress("");
+  };
+
+  const handleRemoveCoSigner = (id: string) => {
+    onCoSignersChange(coSigners.filter((c) => c.id !== id));
+  };
 
   const combinedCopyText = subject.trim()
     ? `Subject: ${subject.trim()}\n\n${draftText.trim()}`
@@ -208,6 +273,7 @@ export function DraftReview({
       portalName: portalGuidance.primary.name,
       referenceNumber: form.referenceNumber.trim() || undefined,
       attachments,
+      coSigners,
       filename: "makkalvoice-official-letter.pdf",
     });
     setCheckedSteps((prev) => ({ ...prev, 2: true }));
@@ -224,6 +290,7 @@ export function DraftReview({
       portalName: portalGuidance.primary.name,
       referenceNumber: form.referenceNumber.trim() || undefined,
       attachments,
+      coSigners,
       filename: "makkalvoice-complaint-paper.pdf",
     });
     if (result !== "cancelled") {
@@ -320,6 +387,21 @@ export function DraftReview({
         <div className="whitespace-pre-wrap text-[12pt] leading-relaxed font-sans">
           {draftText}
         </div>
+        {coSigners.length > 0 && (
+          <div className="mt-6 pt-4 border-t border-slate-300">
+            <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
+              Joint Citizen Co-Signatories ({coSigners.length})
+            </h2>
+            <ol className="list-decimal list-inside space-y-1 text-sm text-slate-900">
+              {coSigners.map((cs) => (
+                <li key={cs.id}>
+                  <span className="font-semibold">{cs.name}</span>
+                  {cs.address ? ` — ${cs.address}` : ""}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         {attachments.length > 0 && (
           <div className="mt-8 pt-4 border-t border-slate-300 space-y-6">
             {attachments.map((att, idx) => (
@@ -414,7 +496,7 @@ export function DraftReview({
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                {userLanguage}
+                {userNativeLangLabel}
               </button>
             </div>
           </div>
@@ -570,6 +652,31 @@ export function DraftReview({
 
               <button
                 type="button"
+                onClick={handleToggleReadDraft}
+                disabled={busy || !draftText.trim()}
+                className={`inline-flex items-center gap-1.5 font-medium transition-colors whitespace-nowrap disabled:opacity-50 ${
+                  isReadingDraft
+                    ? "text-red-700 hover:text-red-900"
+                    : "text-slate-700 hover:text-slate-950"
+                }`}
+              >
+                {isReadingDraft ? (
+                  <>
+                    <VolumeX className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {dx.stopLetterBtn}
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {dx.listenLetterBtn}
+                  </>
+                )}
+              </button>
+
+              <span aria-hidden="true" className="text-slate-300">·</span>
+
+              <button
+                type="button"
                 onClick={() => onRegenerate(draftLanguage)}
                 disabled={busy}
                 className="inline-flex items-center gap-1.5 font-medium text-slate-600 hover:text-slate-950 transition-colors whitespace-nowrap disabled:opacity-50"
@@ -583,6 +690,103 @@ export function DraftReview({
             </div>
           </div>
         </div>
+
+        {/* Squared Collapsible Joint Citizen Co-Signers (Neighborhood Group Petition) */}
+        <details className="mt-6 border border-slate-200/90 rounded-xl bg-slate-50/40 group">
+          <summary className="list-none cursor-pointer px-4 sm:px-5 py-3.5 flex items-center justify-between gap-3 select-none">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Users className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+              <span className="text-sm font-semibold text-slate-950 truncate">
+                {dx.coSignersTitle}
+              </span>
+              {coSigners.length > 0 && (
+                <span className="font-mono text-xs text-emerald-700 tabular-nums shrink-0">
+                  ({coSigners.length})
+                </span>
+              )}
+            </div>
+            <ChevronDown
+              className="w-4 h-4 text-slate-500 transition-transform group-open:rotate-180 shrink-0"
+              aria-hidden="true"
+            />
+          </summary>
+
+          <div className="px-4 sm:px-5 pb-4 pt-3.5 border-t border-slate-200/70 bg-white rounded-b-xl space-y-3.5">
+            <p className="text-xs text-slate-600 leading-relaxed">{dx.coSignersSub}</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+              <input
+                type="text"
+                value={coSignerName}
+                onChange={(e) => setCoSignerName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCoSigner();
+                  }
+                }}
+                placeholder={dx.coSignerNamePlaceholder}
+                className="sm:col-span-5 h-11 px-3.5 text-sm text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
+              />
+              <input
+                type="text"
+                value={coSignerAddress}
+                onChange={(e) => setCoSignerAddress(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCoSigner();
+                  }
+                }}
+                placeholder={dx.coSignerAddressPlaceholder}
+                className="sm:col-span-5 h-11 px-3.5 text-sm text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
+              />
+              <button
+                type="button"
+                onClick={handleAddCoSigner}
+                disabled={!coSignerName.trim()}
+                className="sm:col-span-2 h-11 inline-flex items-center justify-center gap-1.5 px-3 text-xs sm:text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors whitespace-nowrap disabled:opacity-40"
+              >
+                <Plus className="w-4 h-4 shrink-0" aria-hidden="true" />
+                {dx.coSignerAddBtn}
+              </button>
+            </div>
+
+            {coSigners.length === 0 ? (
+              <p className="text-xs text-slate-500">{dx.coSignersEmptyHint}</p>
+            ) : (
+              <div className="space-y-2">
+                <ul className="divide-y divide-slate-200/80 border border-slate-200 rounded-xl overflow-hidden">
+                  {coSigners.map((cs, idx) => (
+                    <li
+                      key={cs.id}
+                      className="px-3.5 py-2.5 bg-slate-50/50 flex items-center justify-between gap-3 text-xs sm:text-sm"
+                    >
+                      <div className="min-w-0 flex items-baseline gap-2">
+                        <span className="font-mono text-xs tabular-nums text-slate-500 shrink-0">
+                          {idx + 1}.
+                        </span>
+                        <span className="font-medium text-slate-900 truncate">{cs.name}</span>
+                        {cs.address && (
+                          <span className="text-slate-500 truncate">— {cs.address}</span>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCoSigner(cs.id)}
+                        aria-label={dx.coSignerRemoveLabel}
+                        className="p-1.5 text-slate-400 hover:text-red-700 rounded-lg transition-colors shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-emerald-800 font-medium">{dx.coSignersIncludedNote}</p>
+              </div>
+            )}
+          </div>
+        </details>
 
         {/* Department & Verified Facts */}
         {(draftData.suggestedAuthority || draftData.summaryPoints.length > 0) && (
@@ -1088,12 +1292,17 @@ export function DraftReview({
             {/* Proof Photo Compressor & PDF Bundler */}
             <EvidenceToolsPanel
               it={it}
+              language={userLanguage}
               attachments={attachments}
               onAttachmentsChange={onAttachmentsChange}
               subject={subject}
               draftText={draftText}
               portalName={portalGuidance.primary.name}
               referenceNumber={form.referenceNumber.trim() || undefined}
+              gpsLat={form.gpsLat}
+              gpsLng={form.gpsLng}
+              locationStamp={[effectiveDistrict, form.state].filter(Boolean).join(", ")}
+              coSigners={coSigners}
             />
           </div>
         </details>

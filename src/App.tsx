@@ -9,6 +9,7 @@ import {
   Globe,
   Landmark,
   Mic,
+  PhoneCall,
   Shield,
   X,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import { ComplaintTrackerSection } from "./components/ComplaintTrackerSection";
 import { DraftReview } from "./components/DraftReview";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
 import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
+import { getDashboardExtrasStrings } from "./data/dashboardExtrasTranslations";
 import { INDIA_STATE_DISTRICTS } from "./data/indiaLocations";
 import { getInnovationStrings } from "./data/innovationTranslations";
 import {
@@ -35,10 +37,12 @@ import type {
   AnswerEntry,
   ChatMessage,
   ComplaintFormState,
+  CoSignerEntry,
   DraftResponse,
   EvidenceAttachment,
   GpsLocationResult,
   PortalChatMessage,
+  QueuedOfflineComplaint,
   SavedComplaintRecord,
   StepId,
 } from "./types";
@@ -101,6 +105,27 @@ function makeMessageId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+const OFFLINE_QUEUE_KEY = "makkalvoice_offline_queue_v1";
+
+function loadOfflineQueue(): QueuedOfflineComplaint[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as QueuedOfflineComplaint[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistOfflineQueue(items: QueuedOfflineComplaint[]): void {
+  try {
+    localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(items.slice(0, 20)));
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 export default function App() {
   const [form, setForm] = useState<ComplaintFormState>(() => {
     const saved = loadAutosavedForm();
@@ -128,8 +153,18 @@ export default function App() {
   const [scanPreviewUrl, setScanPreviewUrl] = useState<string | null>(null);
   const [scanNotice, setScanNotice] = useState<string | null>(null);
 
-  // Innovation 3: Proof Attachments for Photo Compressor & PDF Bundler
+  // Innovation 3: Proof Attachments & Joint Petition Co-Signers
   const [attachments, setAttachments] = useState<EvidenceAttachment[]>([]);
+  const [coSigners, setCoSigners] = useState<CoSignerEntry[]>([]);
+
+  // Offline Queue (Step 1)
+  const [isOffline, setIsOffline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? !navigator.onLine : false,
+  );
+  const [offlineQueue, setOfflineQueue] = useState<QueuedOfflineComplaint[]>(() =>
+    loadOfflineQueue(),
+  );
+  const [offlineQueueNotice, setOfflineQueueNotice] = useState<string | null>(null);
 
   // Innovation 4: Personal Complaint Tracker Vault
   const [savedRecords, setSavedRecords] = useState<SavedComplaintRecord[]>(() =>
@@ -137,6 +172,7 @@ export default function App() {
   );
   const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
   const [escalatingId, setEscalatingId] = useState<string | null>(null);
+  const [rtiDraftingId, setRtiDraftingId] = useState<string | null>(null);
 
   // Beginner-friendly primary dashboard view switcher
   const [dashboardTab, setDashboardTab] = useState<"write" | "saved" | "portals">("write");
@@ -169,6 +205,7 @@ export default function App() {
   const t = useMemo(() => getUiStrings(form.language), [form.language]);
   const st = useMemo(() => getSubmissionStrings(form.language), [form.language]);
   const it = useMemo(() => getInnovationStrings(form.language), [form.language]);
+  const dx = useMemo(() => getDashboardExtrasStrings(form.language), [form.language]);
   const speechOutputSupported = useMemo(() => isSpeechSynthesisSupported(), []);
 
   const voiceRecorder = useVoiceRecorder({
@@ -236,6 +273,22 @@ export default function App() {
   useEffect(() => {
     persistSavedComplaints(savedRecords);
   }, [savedRecords]);
+
+  // Track online/offline connectivity and persist offline queue
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false);
+    const goOffline = () => setIsOffline(true);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    persistOfflineQueue(offlineQueue);
+  }, [offlineQueue]);
 
   // Sync HTML lang and dir attributes whenever user changes dashboard language
   useEffect(() => {
@@ -434,6 +487,7 @@ export default function App() {
     setEditableDraft("");
     setActiveSavedId(null);
     setAttachments([]);
+    setCoSigners([]);
     setScanPreviewUrl(null);
     setScanNotice(null);
     setPortalChatMessages([]);
@@ -442,6 +496,39 @@ export default function App() {
     setFieldErrors({});
     setAutoFillNotice(null);
     setStep("describe");
+  };
+
+  const handleSaveToOfflineQueue = () => {
+    if (!form.complaint.trim()) {
+      setErrorMessage(t.errEmptyComplaint);
+      return;
+    }
+    const item: QueuedOfflineComplaint = {
+      id: makeMessageId(),
+      queuedAt: new Date().toISOString().slice(0, 10),
+      form: { ...form },
+    };
+    setOfflineQueue((prev) => [item, ...prev]);
+    setOfflineQueueNotice(dx.offlineQueueSavedToast);
+    setTimeout(() => setOfflineQueueNotice(null), 4500);
+  };
+
+  const handleLoadOfflineItem = (item: QueuedOfflineComplaint) => {
+    stopVoiceInput();
+    handleStopSpeaking();
+    setForm({ ...INITIAL_FORM, ...item.form });
+    setOfflineQueue((prev) => prev.filter((q) => q.id !== item.id));
+    setErrorMessage(null);
+    setFieldErrors({});
+    setDashboardTab("write");
+    setStep("describe");
+    requestAnimationFrame(() => {
+      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+    });
+  };
+
+  const handleRemoveOfflineItem = (id: string) => {
+    setOfflineQueue((prev) => prev.filter((q) => q.id !== id));
   };
 
   const handleToggleReadGuide = () => {
@@ -839,6 +926,58 @@ export default function App() {
     }
   };
 
+  const handleGenerateRtiFromTracker = async (record: SavedComplaintRecord) => {
+    if (rtiDraftingId || escalatingId || busy) return;
+    setRtiDraftingId(record.id);
+    setErrorMessage(null);
+
+    try {
+      const rtiForm: ComplaintFormState = {
+        ...form,
+        mode: "rti",
+        previousTicketId: record.trackingId || record.referenceNumber || "",
+        category: record.category,
+        state: record.state,
+        district: record.district,
+        customDistrict: "",
+        town: record.town,
+        street: record.street,
+        pincode: record.pincode,
+        referenceNumber: record.referenceNumber,
+        complaint: `Formal Right to Information (RTI) Act, 2005 status inquiry regarding unresolved public grievance "${record.subject}" filed on ${record.createdAt} with ${record.portalName}${record.trackingId ? ` (Tracking / Acknowledgement ID: ${record.trackingId})` : ""}. Please provide: (1) current status and daily progress report, (2) name and designation of the officer responsible for action, (3) copies of all file notings, inspection reports, and action-taken memos, and (4) expected date of resolution.`,
+      };
+      const rtiDraft = await requestComplaintDraft(
+        rtiForm,
+        [],
+        "English",
+        form.language,
+      );
+      setForm(rtiForm);
+      setDraftData(rtiDraft);
+      setEditableSubject(rtiDraft.subject);
+      setEditableDraft(rtiDraft.draft);
+      setDraftLanguage(rtiDraft.draftLanguage);
+      setActiveSavedId(null);
+      setDashboardTab("write");
+      setStep("review");
+      requestAnimationFrame(() => {
+        document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+      });
+    } catch (err) {
+      setErrorMessage(resolveLocalizedErrorMessage(err, form.language));
+    } finally {
+      setRtiDraftingId(null);
+    }
+  };
+
+  const handleImportTrackerRecords = (imported: SavedComplaintRecord[]) => {
+    setSavedRecords((prev) => {
+      const existingIds = new Set(prev.map((r) => r.id));
+      const fresh = imported.filter((r) => !existingIds.has(r.id));
+      return [...fresh, ...prev].slice(0, 60);
+    });
+  };
+
   const steps: Array<{ id: StepId; number: string; label: string; enabled: boolean }> = [
     { id: "describe", number: "01", label: t.step1Label, enabled: true },
     { id: "clarify", number: "02", label: t.step2Label, enabled: messages.length > 0 },
@@ -927,14 +1066,14 @@ export default function App() {
             <div className="flex items-start sm:items-center gap-2.5">
               <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5 sm:mt-0" aria-hidden="true" />
               <p className="leading-relaxed">
-                Google Maps daily demo quota has been reached. You can still select your State, District, and address manually.{" "}
+                {it.mapsQuotaBanner}{" "}
                 <a
                   href="https://developers.google.com/maps/ai/ai-studio?utm_campaign=gmp_mcp_codeassist_v1_aistudio#quota_exceeded_errors"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="font-semibold underline text-amber-900 hover:text-amber-950"
                 >
-                  Learn how to upgrade quota
+                  {it.mapsQuotaLearnMore}
                 </a>
               </p>
             </div>
@@ -942,7 +1081,7 @@ export default function App() {
               type="button"
               onClick={() => setMapsQuotaExceeded(false)}
               className="p-1 text-amber-800 hover:text-amber-950 rounded-lg shrink-0"
-              aria-label="Dismiss quota notice"
+              aria-label={it.mapsQuotaDismiss}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>
@@ -1260,6 +1399,12 @@ export default function App() {
                   onToggleReadGuide={handleToggleReadGuide}
                   errorMessage={errorMessage}
                   fieldErrors={fieldErrors}
+                  isOffline={isOffline}
+                  offlineQueue={offlineQueue}
+                  offlineQueueNotice={offlineQueueNotice}
+                  onSaveToOfflineQueue={handleSaveToOfflineQueue}
+                  onLoadOfflineItem={handleLoadOfflineItem}
+                  onRemoveOfflineItem={handleRemoveOfflineItem}
                 />
               )}
 
@@ -1322,6 +1467,8 @@ export default function App() {
                   onOpenAssistant={handleOpenAssistant}
                   attachments={attachments}
                   onAttachmentsChange={setAttachments}
+                  coSigners={coSigners}
+                  onCoSignersChange={setCoSigners}
                   isSavedToTracker={activeSavedId !== null}
                   onSaveToTracker={handleSaveToTracker}
                 />
@@ -1333,18 +1480,74 @@ export default function App() {
           {dashboardTab === "saved" && (
             <ComplaintTrackerSection
               it={it}
+              language={form.language}
+              visitPortalLabel={t.visitPortal}
               records={savedRecords}
               escalatingId={escalatingId}
+              rtiDraftingId={rtiDraftingId}
               onUpdateRecord={handleUpdateTrackerRecord}
               onDeleteRecord={handleDeleteTrackerRecord}
               onGenerateEscalation={(rec) => void handleGenerateEscalationFromTracker(rec)}
+              onGenerateRtiInquiry={(rec) => void handleGenerateRtiFromTracker(rec)}
               onLoadRecordIntoReview={handleLoadTrackerRecord}
+              onImportRecords={handleImportTrackerRecords}
             />
           )}
 
-          {/* VIEW 3: Verified Official Portals & How It Works */}
+          {/* VIEW 3: Verified Official Portals, National Helplines & How It Works */}
           {dashboardTab === "portals" && (
             <div className="space-y-6">
+              {/* Squared National Toll-Free Helplines Strip */}
+              <section
+                aria-labelledby="national-helplines-heading"
+                className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+                  <div>
+                    <h2
+                      id="national-helplines-heading"
+                      className="font-display text-xl sm:text-2xl font-bold tracking-tight text-slate-950"
+                    >
+                      {dx.helplinesTitle}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-600 leading-relaxed">
+                      {dx.helplinesSub}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {[
+                    { number: "112", label: dx.helplineEmergency },
+                    { number: "1930", label: dx.helplineCyber },
+                    { number: "1915", label: dx.helplineConsumer },
+                    { number: "139", label: dx.helplineRailway },
+                    { number: "181", label: dx.helplineWomen },
+                    { number: "1098", label: dx.helplineChild },
+                  ].map((item) => (
+                    <a
+                      key={item.number}
+                      href={`tel:${item.number}`}
+                      aria-label={`${dx.tapToCallLabel} ${item.number} — ${item.label}`}
+                      className="group min-h-[96px] flex flex-col justify-between p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-blue-50/60 hover:border-blue-300 transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-lg font-bold tracking-tight tabular-nums text-slate-950 group-hover:text-blue-800">
+                          {item.number}
+                        </span>
+                        <PhoneCall
+                          className="w-4 h-4 text-blue-700 shrink-0"
+                          aria-hidden="true"
+                        />
+                      </div>
+                      <span className="mt-2 text-xs font-medium text-slate-700 leading-snug line-clamp-2">
+                        {item.label}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+
               <section
                 id="official-portals"
                 className="no-print bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.05)] p-5 sm:p-8"

@@ -140,7 +140,7 @@ export function DirectSubmitPermissionModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close verification dialog"
+            aria-label={ds.modalCloseLabel}
             className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors shrink-0"
           >
             <X className="w-5 h-5" aria-hidden="true" />

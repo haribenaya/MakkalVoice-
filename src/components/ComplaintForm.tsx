@@ -4,6 +4,8 @@ import {
   Camera,
   CheckCircle2,
   ChevronDown,
+  Circle,
+  CloudOff,
   FileText,
   Hash,
   Loader2,
@@ -13,12 +15,14 @@ import {
   MicOff,
   Phone,
   RotateCcw,
+  Trash2,
   User,
   Volume2,
   VolumeX,
 } from "lucide-react";
 import { COMPLAINT_CATEGORIES, LANGUAGES, SAMPLE_SCENARIOS } from "../data/languages";
 import { INDIA_STATE_DISTRICTS, INDIAN_STATES_AND_UTS } from "../data/indiaLocations";
+import { getDashboardExtrasStrings } from "../data/dashboardExtrasTranslations";
 import type { InnovationStrings } from "../data/innovationTranslations";
 import { getLocalizedDistrictName, getLocalizedStateName } from "../data/localizedLocations";
 import { getLocalizedError } from "../data/localizedErrors";
@@ -29,6 +33,7 @@ import type {
   ComplaintCategory,
   ComplaintFormState,
   GpsLocationResult,
+  QueuedOfflineComplaint,
   SubmissionMode,
 } from "../types";
 import { LocationPinpointPicker } from "./LocationPinpointPicker";
@@ -57,6 +62,12 @@ interface ComplaintFormProps {
   scanNotice: string | null;
   onGpsLocationResolved: (result: GpsLocationResult) => void;
   autosaved: boolean;
+  isOffline: boolean;
+  offlineQueue: QueuedOfflineComplaint[];
+  offlineQueueNotice: string | null;
+  onSaveToOfflineQueue: () => void;
+  onLoadOfflineItem: (item: QueuedOfflineComplaint) => void;
+  onRemoveOfflineItem: (id: string) => void;
   busy: boolean;
   isListening: boolean;
   isTranscribing: boolean;
@@ -90,6 +101,12 @@ export function ComplaintForm({
   scanNotice,
   onGpsLocationResolved,
   autosaved,
+  isOffline,
+  offlineQueue,
+  offlineQueueNotice,
+  onSaveToOfflineQueue,
+  onLoadOfflineItem,
+  onRemoveOfflineItem,
   busy,
   isListening,
   isTranscribing,
@@ -104,6 +121,7 @@ export function ComplaintForm({
   errorMessage,
   fieldErrors,
 }: ComplaintFormProps) {
+  const dx = getDashboardExtrasStrings(form.language);
   const scanFileInputRef = useRef<HTMLInputElement | null>(null);
   const districtsForState = form.state ? INDIA_STATE_DISTRICTS[form.state] ?? [] : [];
   const activeLanguageObj = LANGUAGES.find((l) => l.name === form.language);
@@ -800,6 +818,122 @@ export function ComplaintForm({
           </div>
         </details>
 
+        {/* Squared Offline Queue Panel (shown only when items are queued on device) */}
+        {offlineQueue.length > 0 && (
+          <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/90 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-amber-950">
+                <CloudOff className="w-4 h-4 text-amber-700 shrink-0" aria-hidden="true" />
+                <span>{dx.offlineQueueBannerTitle}</span>
+              </div>
+              <span className="font-mono text-xs tabular-nums text-amber-900">
+                {offlineQueue.length} {dx.offlineQueueCountSuffix}
+              </span>
+            </div>
+
+            <div className="divide-y divide-amber-200/70 border-t border-amber-200/70">
+              {offlineQueue.map((item) => (
+                <div
+                  key={item.id}
+                  className="pt-2.5 pb-1 first:pt-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-medium text-slate-900 truncate">
+                      {item.form.complaint}
+                    </p>
+                    <p className="text-[11px] font-mono tabular-nums text-slate-600">
+                      {item.queuedAt}
+                      {item.form.state ? ` · ${getLocalizedStateName(item.form.state, form.language)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onLoadOfflineItem(item)}
+                      className="h-9 px-3 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap disabled:opacity-50"
+                    >
+                      {dx.offlineQueueProcessBtn}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRemoveOfflineItem(item.id)}
+                      aria-label={dx.offlineQueueRemoveBtn}
+                      className="h-9 px-2.5 text-xs text-slate-600 hover:text-red-700 border border-amber-300/80 bg-white rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Squared 4-Cell Complaint Readiness Check */}
+        {(() => {
+          const hasProblem = form.complaint.trim().length >= 8;
+          const hasLocation = Boolean(
+            form.state && (form.district === "__other__" ? form.customDistrict.trim() : form.district),
+          );
+          const phoneDigits = form.contact.replace(/\D/g, "");
+          const hasContact = form.name.trim().length >= 2 && phoneDigits.length >= 10;
+          const hasRefOrScan = Boolean(form.referenceNumber.trim() || scanPreviewUrl);
+          const coreReady = hasProblem && hasLocation && hasContact;
+          const completedCount = [hasProblem, hasLocation, hasContact, hasRefOrScan].filter(Boolean).length;
+
+          const checks = [
+            { id: "problem", label: dx.checkProblem, ok: hasProblem },
+            { id: "location", label: dx.checkLocation, ok: hasLocation },
+            { id: "contact", label: dx.checkContact, ok: hasContact },
+            { id: "ref", label: dx.checkProofOrRef, ok: hasRefOrScan },
+          ];
+
+          return (
+            <div className="pt-5 border-t border-slate-200/80 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-slate-700">{dx.readinessTitle}</p>
+                <p
+                  className={`text-xs font-semibold font-mono tabular-nums ${
+                    coreReady ? "text-emerald-700" : "text-slate-500"
+                  }`}
+                >
+                  {completedCount}/4 · {coreReady ? dx.readinessReady : dx.readinessNeedsMore}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+                {checks.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`px-3 py-2.5 rounded-xl border text-xs font-medium flex items-center gap-2 min-h-[44px] transition-colors ${
+                      item.ok
+                        ? "bg-emerald-50/70 border-emerald-200/90 text-emerald-950"
+                        : "bg-slate-50/70 border-slate-200 text-slate-600"
+                    }`}
+                  >
+                    {item.ok ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                    ) : (
+                      <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
+                    )}
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
+
+        {offlineQueueNotice && (
+          <div
+            role="status"
+            className="px-4 py-3 text-xs sm:text-sm text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-2"
+          >
+            <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+            <span>{offlineQueueNotice}</span>
+          </div>
+        )}
+
         {errorMessage && (
           <div
             role="alert"
@@ -810,16 +944,29 @@ export function ComplaintForm({
         )}
 
         {/* Primary Submit Row */}
-        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <p className="text-xs sm:text-sm text-slate-500">{t.nextStepHint}</p>
-          <button
-            type="submit"
-            disabled={busy || extractingVoice || scanningEvidence || isTranscribing}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px] disabled:opacity-60"
-          >
-            {busy ? t.analyzingDetails : t.prepareComplaint}
-            <ArrowRight className="w-4 h-4" aria-hidden="true" />
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shrink-0">
+            {isOffline && (
+              <button
+                type="button"
+                onClick={onSaveToOfflineQueue}
+                disabled={busy || !form.complaint.trim()}
+                className="inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[52px] disabled:opacity-50"
+              >
+                <CloudOff className="w-4 h-4 shrink-0" aria-hidden="true" />
+                {dx.offlineQueueSaveBtn}
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={busy || extractingVoice || scanningEvidence || isTranscribing}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-7 py-3.5 text-base font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px] disabled:opacity-60"
+            >
+              {busy ? t.analyzingDetails : t.prepareComplaint}
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </form>
     </section>

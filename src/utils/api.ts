@@ -69,6 +69,9 @@ export async function postApiJSON<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let response: Response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
+
     try {
       response = await fetch(`${API_BASE}/${endpoint}`, {
         method: "POST",
@@ -76,17 +79,24 @@ export async function postApiJSON<T>(
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
-    } catch {
-      if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1400));
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isAbort = err instanceof Error && err.name === "AbortError";
+      if (attempt < maxAttempts && !isAbort) {
+        await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
       throw new ApiError(
-        "Could not connect to the server. Please check your connection and try again.",
-        "NETWORK_ERROR",
-        0,
+        isAbort
+          ? "The AI service took too long to respond. Please try again."
+          : "Could not connect to the server. Please check your connection and try again.",
+        isAbort ? "AI_TIMEOUT" : "NETWORK_ERROR",
+        isAbort ? 504 : 0,
       );
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     let data: Record<string, unknown> = {};
@@ -105,16 +115,15 @@ export async function postApiJSON<T>(
         window.dispatchEvent(new CustomEvent("gmp-quota-exceeded"));
       }
 
+      // Retry once ONLY on transient server/gateway errors (never amplify 429 quota limits)
       const isTransientAiStatus =
         isRetryableEndpoint &&
         (response.status === 503 ||
           response.status === 504 ||
-          response.status === 502 ||
-          response.status === 429);
+          response.status === 502);
 
       if (isTransientAiStatus && attempt < maxAttempts) {
-        const delayMs = response.status === 429 ? 2800 : 1800;
-        await new Promise((r) => setTimeout(r, delayMs));
+        await new Promise((r) => setTimeout(r, 1500));
         continue;
       }
 

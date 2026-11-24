@@ -66,12 +66,7 @@ export default defineConfig(() => {
             },
             {
               urlPattern: /\/api\/.*/i,
-              handler: 'NetworkFirst',
-              options: {
-                cacheName: 'makkalvoice-api-cache',
-                networkTimeoutSeconds: 10,
-                cacheableResponse: { statuses: [0, 200] },
-              },
+              handler: 'NetworkOnly',
             },
           ],
         },

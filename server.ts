@@ -17,16 +17,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = "gemini-4-hydrogen";
-const FAST_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
-const DRAFT_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
+const MODEL_NAME = "gemini-3.1-flash-lite";
+const FAST_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
+const DRAFT_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
 const TRANSCRIBE_MODELS = [
   "gemini-3.5-transcribe",
-  "gemini-4-hydrogen",
   "gemini-3.1-flash-lite",
+  "gemini-4-hydrogen",
 ] as const;
-const REQUEST_TIMEOUT_MS = 28_000;
-const ATTEMPT_TIMEOUT_MS = 18_000;
+const REQUEST_TIMEOUT_MS = 22_000;
+const ATTEMPT_TIMEOUT_MS = 14_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
 
 // Per-model transient health cooldown so busy/rate-limited models are skipped immediately
@@ -34,7 +34,7 @@ const modelCooldownUntil = new Map<string, number>();
 
 // Short TTL in-memory cache for identical idempotent AI requests (prevents duplicate quota spend on double-clicks)
 const aiResponseCache = new Map<string, { expiresAt: number; data: unknown }>();
-const AI_CACHE_TTL_MS = 60_000;
+const AI_CACHE_TTL_MS = 90_000;
 
 function getCachedAiResponse<T>(key: string): T | null {
   const entry = aiResponseCache.get(key);
@@ -283,17 +283,64 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   }
 }
 
+function safeParseJsonObject<T = Record<string, unknown>>(rawText: string): T {
+  const trimmed = (rawText ?? "").replace(/^\uFEFF/, "").trim();
+  if (!trimmed) {
+    throw Object.assign(new Error("Empty JSON response from AI model."), {
+      code: "MALFORMED_JSON",
+    });
+  }
+
+  // Strip optional markdown ```json ... ``` fences
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  try {
+    const parsed = JSON.parse(unfenced);
+    if (parsed && typeof parsed === "object") return parsed as T;
+  } catch {
+    // Fall through to balanced-brace extraction
+  }
+
+  const firstBrace = unfenced.indexOf("{");
+  const lastBrace = unfenced.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const slice = unfenced.slice(firstBrace, lastBrace + 1);
+    try {
+      const parsed = JSON.parse(slice);
+      if (parsed && typeof parsed === "object") return parsed as T;
+    } catch {
+      // Fall through to error
+    }
+  }
+
+  throw Object.assign(new Error("Malformed JSON response from AI model."), {
+    code: "MALFORMED_JSON",
+  });
+}
+
+function isRateLimitError(error: unknown): boolean {
+  const err = error as { status?: number; message?: string };
+  const msg = String(err?.message ?? "");
+  return err?.status === 429 || /RESOURCE_EXHAUSTED|quota|rate.?limit|\b429\b/i.test(msg);
+}
+
 function isRetryableGeminiError(error: unknown): boolean {
   const err = error as { statusCode?: number; status?: number; code?: string | number; message?: string };
   const msg = String(err?.message ?? "");
   return (
     err?.statusCode === 504 ||
     err?.code === "TIMEOUT" ||
+    err?.code === "MALFORMED_JSON" ||
     err?.status === 503 ||
     err?.status === 500 ||
     err?.status === 429 ||
     err?.status === 404 ||
-    /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|NOT_FOUND|high demand|timeout|ECONNRESET/i.test(msg)
+    /UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|NOT_FOUND|high demand|timeout|ECONNRESET|fetch failed|socket hang up|Empty .*response/i.test(
+      msg,
+    )
   );
 }
 
@@ -302,7 +349,7 @@ function extractRetryAfterMs(error: unknown): number | null {
   const secMatch = msg.match(/retry\s*(?:in|after|delay["']?\s*[:=]\s*["']?)\s*(\d+(?:\.\d+)?)\s*s/i);
   if (secMatch) {
     const secs = Number(secMatch[1]);
-    if (Number.isFinite(secs) && secs > 0 && secs <= 20) {
+    if (Number.isFinite(secs) && secs > 0 && secs <= 30) {
       return Math.ceil(secs * 1000);
     }
   }
@@ -315,11 +362,12 @@ function isQuotaOrBusyError(error: unknown): boolean {
   return (
     err?.status === 503 ||
     err?.status === 429 ||
-    /UNAVAILABLE|RESOURCE_EXHAUSTED|overloaded|high demand|quota/i.test(msg)
+    err?.status === 500 ||
+    /UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand|quota/i.test(msg)
   );
 }
 
-function orderModelsByHealth(models: readonly string[]): string[] {
+function selectModelsForAttempt(models: readonly string[]): string[] {
   const now = Date.now();
   const healthy: string[] = [];
   const cooling: Array<{ model: string; until: number }> = [];
@@ -333,15 +381,21 @@ function orderModelsByHealth(models: readonly string[]): string[] {
     }
   }
 
+  // If at least one model is healthy, ONLY try healthy models (skip busy/rate-limited models!)
+  if (healthy.length > 0) {
+    return healthy;
+  }
+
+  // If every model is cooling down, try the one closest to recovery first, then backup
   cooling.sort((a, b) => a.until - b.until);
-  return [...healthy, ...cooling.map((c) => c.model)];
+  return cooling.map((c) => c.model);
 }
 
 async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
   attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
-  rounds = 3,
+  maxRounds = 2,
 ): Promise<T> {
   if (models.length === 0) {
     throw new Error("No AI models configured.");
@@ -349,21 +403,26 @@ async function generateWithFailover<T>(
 
   let lastError: unknown;
 
-  for (let round = 0; round < rounds; round += 1) {
-    const ordered = orderModelsByHealth(models);
-    let suggestedDelayMs = 0;
+  for (let round = 0; round < maxRounds; round += 1) {
+    const candidateModels =
+      round === 0
+        ? selectModelsForAttempt(models)
+        : selectModelsForAttempt(models).slice(0, 1);
+    let sawOnlyRateLimits = true;
 
-    for (const model of ordered) {
+    for (const model of candidateModels) {
       try {
         const result = await withTimeout(runForModel(model), attemptTimeoutMs);
-        // Model succeeded: immediately clear any prior cooldown
         modelCooldownUntil.delete(model);
         return result;
       } catch (err) {
         lastError = err;
         const errMsg = String((err as Error)?.message ?? "");
+        const rateLimited = isRateLimitError(err);
+        if (!rateLimited) sawOnlyRateLimits = false;
+
         console.warn(
-          `[MakkalVoice AI] round ${round + 1}/${rounds} (${model}) failed:`,
+          `[MakkalVoice AI] round ${round + 1}/${maxRounds} (${model}) failed:`,
           errMsg.slice(0, 180),
         );
 
@@ -375,14 +434,12 @@ async function generateWithFailover<T>(
           throw err;
         }
 
-        // Cool down overloaded or rate-limited model so next model is used immediately
+        // Cool down overloaded or rate-limited model so subsequent calls route directly to healthy backup
         if (isQuotaOrBusyError(err)) {
           const retryHint = extractRetryAfterMs(err);
-          const cooldownMs = retryHint ? Math.max(retryHint, 12_000) : 18_000;
+          const defaultCooldown = rateLimited ? 55_000 : 40_000;
+          const cooldownMs = retryHint ? Math.max(retryHint, defaultCooldown) : defaultCooldown;
           modelCooldownUntil.set(model, Date.now() + cooldownMs);
-          if (retryHint && retryHint > suggestedDelayMs) {
-            suggestedDelayMs = retryHint;
-          }
         }
 
         // If error is non-retryable and not a model-compatibility error, propagate immediately
@@ -395,11 +452,13 @@ async function generateWithFailover<T>(
       }
     }
 
-    // All models failed in this round; wait with polite exponential backoff + jitter before next round
-    if (round < rounds - 1) {
-      const baseDelay = round === 0 ? 1200 : 2600;
-      const jitter = Math.floor(Math.random() * 400);
-      const waitMs = Math.min(Math.max(baseDelay + jitter, suggestedDelayMs), 5000);
+    // Never tight-loop retry when every attempted model returned 429 quota exhaustion
+    if (sawOnlyRateLimits) {
+      break;
+    }
+
+    if (round < maxRounds - 1) {
+      const waitMs = 1200 + Math.floor(Math.random() * 400);
       await new Promise((res) => setTimeout(res, waitMs));
     }
   }
@@ -427,7 +486,7 @@ function mapGeminiError(error: unknown): {
     .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[REDACTED]")
     .slice(0, 260);
 
-  if (err?.statusCode === 504 || err?.code === "TIMEOUT") {
+  if (err?.statusCode === 504 || err?.code === "TIMEOUT" || /timed out/i.test(rawMessage)) {
     return {
       status: 504,
       code: "AI_TIMEOUT",
@@ -435,7 +494,10 @@ function mapGeminiError(error: unknown): {
       diagnostic: safeDiag,
     };
   }
-  if (err?.status === 429 || rawMessage.includes("RESOURCE_EXHAUSTED") || rawMessage.includes("429")) {
+  if (
+    err?.status === 429 ||
+    /RESOURCE_EXHAUSTED|quota|\b429\b/i.test(rawMessage)
+  ) {
     return {
       status: 429,
       code: "AI_RATE_LIMIT",
@@ -445,10 +507,7 @@ function mapGeminiError(error: unknown): {
   }
   if (
     err?.status === 403 ||
-    rawMessage.includes("PERMISSION_DENIED") ||
-    rawMessage.includes("API_KEY_INVALID") ||
-    rawMessage.includes("MISSING_API_KEY") ||
-    rawMessage.includes("not configured")
+    /PERMISSION_DENIED|API_KEY_INVALID|MISSING_API_KEY|not configured/i.test(rawMessage)
   ) {
     return {
       status: 503,
@@ -457,7 +516,11 @@ function mapGeminiError(error: unknown): {
       diagnostic: safeDiag,
     };
   }
-  if (err?.status === 503 || rawMessage.includes("UNAVAILABLE") || rawMessage.includes("overloaded")) {
+  if (
+    err?.status === 503 ||
+    err?.status === 500 ||
+    /UNAVAILABLE|INTERNAL|overloaded|high demand|ECONNRESET|fetch failed|socket hang up/i.test(rawMessage)
+  ) {
     return {
       status: 503,
       code: "AI_UNAVAILABLE",
@@ -649,10 +712,10 @@ async function startServer() {
       }
 
       const ai = getAiClient();
-      const response = await generateWithFailover(
+      const parsed = await generateWithFailover(
         FAST_TEXT_MODELS,
-        (model) =>
-          ai.models.generateContent({
+        async (model) => {
+          const response = await ai.models.generateContent({
             model,
             contents: {
               parts: [
@@ -694,11 +757,12 @@ async function startServer() {
                 ],
               },
             },
-          }),
+          });
+          return safeParseJsonObject<Record<string, unknown>>(response.text ?? "");
+        },
         REQUEST_TIMEOUT_MS,
       );
 
-      const parsed = JSON.parse((response.text ?? "{}").trim() || "{}") as Record<string, unknown>;
       res.json({
         issueSummary: cleanMultilineText(parsed.issueSummary, 1000),
         extractedReferenceNumber: cleanText(parsed.extractedReferenceNumber, 80),
@@ -902,10 +966,10 @@ async function startServer() {
 
       const ai = getAiClient();
 
-      const response = await generateWithFailover(
+      const parsed = await generateWithFailover(
         FAST_TEXT_MODELS,
-        (model) =>
-          ai.models.generateContent({
+        async (model) => {
+          const response = await ai.models.generateContent({
             model,
             contents: [
               `Spoken/typed language: ${language}`,
@@ -930,12 +994,12 @@ async function startServer() {
                 required: ["category", "state", "district", "town", "street"],
               },
             },
-          }),
+          });
+          return safeParseJsonObject<Record<string, unknown>>(response.text ?? "");
+        },
         ATTEMPT_TIMEOUT_MS,
       );
 
-      const rawText = (response.text ?? "").trim();
-      const parsed = JSON.parse(rawText || "{}") as Record<string, unknown>;
       const matchedState = INDIAN_STATES_AND_UTS.find(
         (s) => s.toLowerCase() === cleanText(parsed.state, 80).toLowerCase(),
       );
@@ -1038,10 +1102,10 @@ async function startServer() {
       ].join("\n");
 
       const callModel = async (extraAvoid = "") => {
-        const response = await generateWithFailover(
+        const parsed = await generateWithFailover(
           FAST_TEXT_MODELS,
-          (model) =>
-            ai.models.generateContent({
+          async (model) => {
+            const response = await ai.models.generateContent({
               model,
               contents: buildPrompt(extraAvoid),
               config: {
@@ -1058,17 +1122,16 @@ async function startServer() {
                   required: ["complete", "question", "reason"],
                 },
               },
-            }),
+            });
+            return safeParseJsonObject<{
+              complete?: boolean;
+              question?: string;
+              reason?: string;
+            }>(response.text ?? "");
+          },
           ATTEMPT_TIMEOUT_MS,
         );
 
-        const rawText = (response.text ?? "").trim();
-        if (!rawText) throw new Error("Empty response from AI model.");
-        const parsed = JSON.parse(rawText) as {
-          complete?: boolean;
-          question?: string;
-          reason?: string;
-        };
         return {
           complete: Boolean(parsed.complete),
           question: cleanText(parsed.question, 320),
@@ -1205,10 +1268,17 @@ async function startServer() {
         .filter(Boolean)
         .join("\n\n");
 
-      const response = await generateWithFailover(
+      const draftCacheKey = `complaint-draft:${mode}:${draftLanguage}:${uiLanguage}:${category}:${state}:${district}:${previousTicketId}:${complaint.toLowerCase()}:${answers.map((a) => `${a.question}=${a.answer}`).join("|")}`;
+      const cachedDraft = getCachedAiResponse<Record<string, unknown>>(draftCacheKey);
+      if (cachedDraft) {
+        res.json(cachedDraft);
+        return;
+      }
+
+      const parsed = await generateWithFailover(
         DRAFT_TEXT_MODELS,
-        (model) =>
-          ai.models.generateContent({
+        async (model) => {
+          const response = await ai.models.generateContent({
             model,
             contents: prompt,
             config: {
@@ -1255,29 +1325,33 @@ async function startServer() {
                 ],
               },
             },
-          }),
+          });
+
+          const parsedObj = safeParseJsonObject<{
+            subject?: string;
+            draft?: string;
+            suggestedAuthority?: string;
+            summaryPoints?: unknown;
+            primaryPortalId?: string;
+            secondaryPortalId?: string;
+            whyThisPortal?: string;
+            portalLanguageTip?: string;
+            filingSteps?: unknown;
+            requiredDocuments?: unknown;
+            englishButtonGuide?: unknown;
+          }>(response.text ?? "");
+
+          if (!cleanMultilineText(parsedObj.draft, 8000)) {
+            throw Object.assign(new Error("Empty draft text in AI response."), {
+              code: "MALFORMED_JSON",
+            });
+          }
+          return parsedObj;
+        },
         REQUEST_TIMEOUT_MS,
       );
 
-      const rawText = (response.text ?? "").trim();
-      if (!rawText) throw new Error("Empty draft response from AI model.");
-
-      const parsed = JSON.parse(rawText) as {
-        subject?: string;
-        draft?: string;
-        suggestedAuthority?: string;
-        summaryPoints?: unknown;
-        primaryPortalId?: string;
-        secondaryPortalId?: string;
-        whyThisPortal?: string;
-        portalLanguageTip?: string;
-        filingSteps?: unknown;
-        requiredDocuments?: unknown;
-        englishButtonGuide?: unknown;
-      };
-
       const draft = cleanMultilineText(parsed.draft, 8000);
-      if (!draft) throw new Error("AI did not return complaint draft text.");
 
       // Strictly enforce verified portal allowlist on the server
       const fallbackPortals = selectFallbackPortalIds(category, state, district, complaint);
@@ -1340,7 +1414,7 @@ async function startServer() {
             .slice(0, 6)
         : [];
 
-      res.json({
+      const draftPayload = {
         subject: cleanText(parsed.subject, 240),
         draft,
         suggestedAuthority: cleanText(parsed.suggestedAuthority, 200),
@@ -1353,7 +1427,9 @@ async function startServer() {
         filingSteps,
         requiredDocuments,
         englishButtonGuide,
-      });
+      };
+      setCachedAiResponse(draftCacheKey, draftPayload);
+      res.json(draftPayload);
     } catch (error) {
       console.error("[/api/complaint-draft] error:", error);
       const mapped = mapGeminiError(error);
@@ -1408,54 +1484,61 @@ async function startServer() {
         year: "numeric",
       });
 
-      const response = await generateWithFailover(
+      const parsed = await generateWithFailover(
         FAST_TEXT_MODELS,
-        (model) =>
-          ai.models.generateContent({
+        async (model) => {
+          const response = await ai.models.generateContent({
             model,
             contents: [
-            `Today's Date: ${todayFormatted}`,
-            `Original Filing Date: ${filedDate || "Earlier"}`,
-            `Original Portal: ${portalName || "Official Government Portal"}`,
-            `Official Portal Tracking / Ticket ID: ${trackingId || "Not yet entered (use [OFFICIAL_TRACKING_ID])"}`,
-            `State / District: ${[district, state].filter(Boolean).join(", ") || "India"}`,
-            `Original Subject: ${subject}`,
-            `Original Complaint Text:\n"""${originalDraft}"""`,
-          ].join("\n\n"),
-          config: {
-            systemInstruction: [
-              `You are MakkalVoice. Draft a firm, respectful official Escalation / Reminder Notice in ${draftLanguage} addressed to the Senior Nodal Officer / District Collector / Appellate Authority.`,
-              "Clearly reference the original filing date, portal name, and Tracking/Ticket ID. Request immediate time-bound intervention since the grievance remains unresolved.",
-              "Use literal placeholders [COMPLAINANT_NAME] and [CONTACT_DETAILS] in the signature block.",
-              `Provide suggestedAuthority, whyThisPortal, portalLanguageTip, and 4 concise summaryPoints in ${uiLanguage}.`,
-            ].join("\n"),
-            thinkingConfig: thinkingConfigForModel(model),
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                subject: { type: Type.STRING },
-                draft: { type: Type.STRING },
-                suggestedAuthority: { type: Type.STRING },
-                summaryPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-                whyThisPortal: { type: Type.STRING },
-                portalLanguageTip: { type: Type.STRING },
+              `Today's Date: ${todayFormatted}`,
+              `Original Filing Date: ${filedDate || "Earlier"}`,
+              `Original Portal: ${portalName || "Official Government Portal"}`,
+              `Official Portal Tracking / Ticket ID: ${trackingId || "Not yet entered (use [OFFICIAL_TRACKING_ID])"}`,
+              `State / District: ${[district, state].filter(Boolean).join(", ") || "India"}`,
+              `Original Subject: ${subject}`,
+              `Original Complaint Text:\n"""${originalDraft}"""`,
+            ].join("\n\n"),
+            config: {
+              systemInstruction: [
+                `You are MakkalVoice. Draft a firm, respectful official Escalation / Reminder Notice in ${draftLanguage} addressed to the Senior Nodal Officer / District Collector / Appellate Authority.`,
+                "Clearly reference the original filing date, portal name, and Tracking/Ticket ID. Request immediate time-bound intervention since the grievance remains unresolved.",
+                "Use literal placeholders [COMPLAINANT_NAME] and [CONTACT_DETAILS] in the signature block.",
+                `Provide suggestedAuthority, whyThisPortal, portalLanguageTip, and 4 concise summaryPoints in ${uiLanguage}.`,
+              ].join("\n"),
+              thinkingConfig: thinkingConfigForModel(model),
+              responseMimeType: "application/json",
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  subject: { type: Type.STRING },
+                  draft: { type: Type.STRING },
+                  suggestedAuthority: { type: Type.STRING },
+                  summaryPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  whyThisPortal: { type: Type.STRING },
+                  portalLanguageTip: { type: Type.STRING },
+                },
+                required: [
+                  "subject",
+                  "draft",
+                  "suggestedAuthority",
+                  "summaryPoints",
+                  "whyThisPortal",
+                  "portalLanguageTip",
+                ],
               },
-              required: [
-                "subject",
-                "draft",
-                "suggestedAuthority",
-                "summaryPoints",
-                "whyThisPortal",
-                "portalLanguageTip",
-              ],
             },
-            },
-          }),
+          });
+          const obj = safeParseJsonObject<Record<string, unknown>>(response.text ?? "");
+          if (!cleanMultilineText(obj.draft, 8000)) {
+            throw Object.assign(new Error("Empty escalation draft in AI response."), {
+              code: "MALFORMED_JSON",
+            });
+          }
+          return obj;
+        },
         REQUEST_TIMEOUT_MS,
       );
 
-      const parsed = JSON.parse((response.text ?? "{}").trim() || "{}") as Record<string, unknown>;
       const fallback = selectFallbackPortalIds(category, state, district, `${subject} ${originalDraft}`);
 
       res.json({
@@ -1583,9 +1666,9 @@ async function startServer() {
       ].join("\n");
 
       const ai = getAiClient();
-      const response = await generateWithFailover(
+      const reply = await generateWithFailover(
         FAST_TEXT_MODELS,
-        (model) => {
+        async (model) => {
           const chat = ai.chats.create({
             model,
             history: sanitizedHistory,
@@ -1594,15 +1677,17 @@ async function startServer() {
               thinkingConfig: thinkingConfigForModel(model),
             },
           });
-          return chat.sendMessage({ message });
+          const response = await chat.sendMessage({ message });
+          const text = cleanMultilineText(response.text, 4000);
+          if (!text) {
+            throw Object.assign(new Error("Empty reply from AI assistant."), {
+              code: "MALFORMED_JSON",
+            });
+          }
+          return text;
         },
         ATTEMPT_TIMEOUT_MS,
       );
-
-      const reply = cleanMultilineText(response.text, 4000);
-      if (!reply) {
-        throw new Error("AI assistant returned an empty reply.");
-      }
 
       res.json({ reply });
     } catch (error) {
@@ -1611,6 +1696,7 @@ async function startServer() {
       res.status(mapped.status).json({
         error: mapped.message,
         code: mapped.code,
+        ...(process.env.NODE_ENV !== "production" && mapped.diagnostic ? { detail: mapped.diagnostic } : {}),
       });
     }
   });

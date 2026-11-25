@@ -44,6 +44,7 @@ import type {
 } from "../types";
 import { resolveEffectiveDistrict } from "../utils/api";
 import { downloadOfficialLetterPdf, shareOfficialLetterPdf } from "../utils/mediaTools";
+import { speakText, stopSpeakingText } from "../utils/speech";
 import {
   DirectSubmitPermissionModal,
   type DirectChannelType,
@@ -178,30 +179,27 @@ export function DraftReview({
 
   useEffect(() => {
     return () => {
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeakingText();
     };
   }, []);
 
   const handleToggleReadDraft = () => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
     if (isReadingDraft) {
-      window.speechSynthesis.cancel();
+      stopSpeakingText();
       setIsReadingDraft(false);
       return;
     }
     const textToSpeak = `${subject.trim()}. ${draftText.trim()}`.trim();
     if (!textToSpeak) return;
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
     const targetLangOption = LANGUAGES.find((l) => l.name === draftLanguage);
-    utterance.lang = targetLangOption?.locale ?? "en-IN";
-    utterance.rate = 0.94;
-    utterance.onend = () => setIsReadingDraft(false);
-    utterance.onerror = () => setIsReadingDraft(false);
-    setIsReadingDraft(true);
-    window.speechSynthesis.speak(utterance);
+    speakText(
+      textToSpeak,
+      targetLangOption?.locale ?? "en-IN",
+      () => setIsReadingDraft(true),
+      () => setIsReadingDraft(false),
+      () => setIsReadingDraft(false),
+      draftLanguage,
+    );
   };
 
   const handleAddCoSigner = () => {

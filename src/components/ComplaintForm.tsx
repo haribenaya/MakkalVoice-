@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import {
   ArrowRight,
+  AudioLines,
   Camera,
   CheckCircle2,
   ChevronDown,
@@ -29,6 +30,7 @@ import { getLocalizedError } from "../data/localizedErrors";
 import { getLocalizedSampleLabel } from "../data/localizedPortals";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import type { UiStrings } from "../data/translations";
+import { getVoiceFlowStrings } from "../data/voiceFlowTranslations";
 import type {
   ComplaintCategory,
   ComplaintFormState,
@@ -75,6 +77,7 @@ interface ComplaintFormProps {
   voiceLiveTranscript?: string;
   speechSupported: boolean;
   onToggleVoice: () => void;
+  onOpenLiveVoiceFlow: () => void;
   speechOutputSupported: boolean;
   isReadingGuide: boolean;
   onToggleReadGuide: () => void;
@@ -113,6 +116,7 @@ export function ComplaintForm({
   voiceLiveTranscript = "",
   speechSupported,
   onToggleVoice,
+  onOpenLiveVoiceFlow,
   speechOutputSupported,
   isReadingGuide,
   onToggleReadGuide,
@@ -120,6 +124,7 @@ export function ComplaintForm({
   fieldErrors,
 }: ComplaintFormProps) {
   const dx = getDashboardExtrasStrings(form.language);
+  const vf = getVoiceFlowStrings(form.language);
   const scanFileInputRef = useRef<HTMLInputElement | null>(null);
   const districtsForState = form.state ? INDIA_STATE_DISTRICTS[form.state] ?? [] : [];
   const activeLanguageObj = LANGUAGES.find((l) => l.name === form.language);
@@ -216,7 +221,30 @@ export function ComplaintForm({
             </h3>
           </div>
 
-          {/* 2 Simple, Friendly Input Actions: Speak OR Scan Photo */}
+          {/* Featured Zero-Button Hands-Free Live Voice Flow Banner */}
+          <button
+            type="button"
+            onClick={onOpenLiveVoiceFlow}
+            disabled={busy || isTranscribing || scanningEvidence}
+            className="w-full p-4 rounded-xl bg-slate-950 hover:bg-slate-900 text-white text-start flex items-center justify-between gap-4 transition-all active:scale-[0.995] disabled:opacity-60"
+          >
+            <div className="flex items-center gap-3.5 min-w-0">
+              <span className="inline-flex items-center justify-center w-11 h-11 rounded-xl bg-blue-600/25 border border-blue-400/35 text-blue-300 shrink-0">
+                <AudioLines className="w-5 h-5" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm sm:text-base font-semibold text-white truncate">
+                  {vf.launchFormBtn}
+                </p>
+                <p className="mt-0.5 text-xs text-slate-300 line-clamp-1">
+                  {vf.launchFormSub}
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-blue-300 shrink-0" aria-hidden="true" />
+          </button>
+
+          {/* 2 Simple, Friendly Manual Input Actions: Speak OR Scan Photo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <button
               type="button"

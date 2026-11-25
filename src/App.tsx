@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ArrowDown,
+  AudioLines,
   BookmarkCheck,
   Check,
   ExternalLink,
@@ -17,6 +18,7 @@ import { ClarifyChat } from "./components/ClarifyChat";
 import { ComplaintForm, type ComplaintFieldErrors } from "./components/ComplaintForm";
 import { ComplaintTrackerSection } from "./components/ComplaintTrackerSection";
 import { DraftReview } from "./components/DraftReview";
+import { LiveVoiceFlowModal } from "./components/LiveVoiceFlowModal";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
 import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
 import { getDashboardExtrasStrings } from "./data/dashboardExtrasTranslations";
@@ -37,6 +39,7 @@ import {
 import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
 import { getSubmissionStrings } from "./data/submissionTranslations";
 import { getUiStrings } from "./data/translations";
+import { getVoiceFlowStrings } from "./data/voiceFlowTranslations";
 import type {
   AnswerEntry,
   ChatMessage,
@@ -60,7 +63,12 @@ import {
   requestVoiceExtraction,
   resolveEffectiveDistrict,
 } from "./utils/api";
-import { compressImageForPortal } from "./utils/mediaTools";
+import {
+  compressImageForPortal,
+  downloadOfficialLetterPdf,
+  shareOfficialLetterPdf,
+} from "./utils/mediaTools";
+import type { LiveIntakePatch, LiveVoiceCommandResult } from "./hooks/useLiveVoiceFlow";
 import { useVoiceRecorder } from "./hooks/useVoiceRecorder";
 import {
   isSpeechSynthesisSupported,
@@ -184,6 +192,10 @@ export default function App() {
   const [portalChatBusy, setPortalChatBusy] = useState(false);
   const [portalChatError, setPortalChatError] = useState<string | null>(null);
 
+  // Hands-Free Gemini Live Voice Flow Studio state
+  const [liveVoiceOpen, setLiveVoiceOpen] = useState(false);
+  const [liveActionToast, setLiveActionToast] = useState<string | null>(null);
+
   // UI & Async state
   const [busy, setBusy] = useState(false);
   const [extractingVoice, setExtractingVoice] = useState(false);
@@ -204,6 +216,7 @@ export default function App() {
   const st = useMemo(() => getSubmissionStrings(form.language), [form.language]);
   const it = useMemo(() => getInnovationStrings(form.language), [form.language]);
   const dx = useMemo(() => getDashboardExtrasStrings(form.language), [form.language]);
+  const vf = useMemo(() => getVoiceFlowStrings(form.language), [form.language]);
   const speechOutputSupported = useMemo(() => isSpeechSynthesisSupported(), []);
 
   const voiceRecorder = useVoiceRecorder({
@@ -536,6 +549,7 @@ export default function App() {
       (msg) => {
         if (msg) setErrorMessage(msg);
       },
+      form.language,
     );
   };
 
@@ -569,6 +583,7 @@ export default function App() {
         (msg) => {
           if (msg) setErrorMessage(msg);
         },
+        form.language,
       );
     },
     [form.language, stopVoiceInput],
@@ -1046,15 +1061,239 @@ export default function App() {
     }
   };
 
-  const handleHeroStartSpeaking = () => {
+  // Live refs so Hands-Free Voice Flow tools always read the latest state with zero stale closures
+  const formRef = useRef(form);
+  formRef.current = form;
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
+  const draftDataRef = useRef(draftData);
+  draftDataRef.current = draftData;
+  const editableSubjectRef = useRef(editableSubject);
+  editableSubjectRef.current = editableSubject;
+  const editableDraftRef = useRef(editableDraft);
+  editableDraftRef.current = editableDraft;
+  const portalGuidanceRef = useRef(portalGuidance);
+  portalGuidanceRef.current = portalGuidance;
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const coSignersRef = useRef(coSigners);
+  coSignersRef.current = coSigners;
+
+  const showLiveToast = useCallback((message: string) => {
+    setLiveActionToast(message);
+    window.setTimeout(() => {
+      setLiveActionToast((prev) => (prev === message ? null : prev));
+    }, 4500);
+  }, []);
+
+  const handleOpenLiveVoiceFlow = useCallback(() => {
+    stopVoiceInput();
+    handleStopSpeaking();
+    setErrorMessage(null);
+    setLiveActionToast(null);
     setDashboardTab("write");
-    setStep("describe");
-    if (speechSupported && voiceTarget !== "complaint") {
-      startVoiceInput("complaint");
-    }
-    requestAnimationFrame(() => {
-      document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
-    });
+    setLiveVoiceOpen(true);
+  }, [handleStopSpeaking, stopVoiceInput]);
+
+  // Live intake update from continuous hands-free speech — NEVER mutates dashboard form.language!
+  const handleLiveIntakeUpdate = useCallback(
+    (patch: LiveIntakePatch) => {
+      setForm((prev) => {
+        const nextState = patch.state || prev.state;
+        const { district, customDistrict } = patch.district
+          ? applyDistrictToForm(prev, nextState, patch.district)
+          : patch.state && patch.state !== prev.state
+            ? { district: "", customDistrict: "" }
+            : { district: prev.district, customDistrict: prev.customDistrict };
+
+        const updated: ComplaintFormState = {
+          ...prev,
+          // Strictly preserve the user's chosen dashboard header language
+          language: prev.language,
+          mode: patch.mode ?? prev.mode,
+          category: patch.category ?? prev.category,
+          state: nextState,
+          district,
+          customDistrict,
+          town: patch.town || prev.town,
+          street: patch.street || prev.street,
+          pincode: patch.pincode || prev.pincode,
+          name: patch.name || prev.name,
+          contact: patch.contact || prev.contact,
+          referenceNumber: patch.referenceNumber || prev.referenceNumber,
+          complaint: patch.complaint || prev.complaint,
+        };
+        formRef.current = updated;
+        return updated;
+      });
+
+      if (patch.followupAnswer) {
+        setAnswers((prev) => {
+          const next = [
+            ...prev,
+            {
+              question: patch.followupQuestion || "Additional detail",
+              answer: patch.followupAnswer!,
+            },
+          ];
+          answersRef.current = next;
+          return next;
+        });
+      }
+      setFieldErrors({});
+    },
+    [applyDistrictToForm],
+  );
+
+  const handleLiveGenerateDraftCommand = useCallback(
+    async (
+      requestedDraftLang: string,
+      spokenLanguage: string,
+    ): Promise<LiveVoiceCommandResult> => {
+      const latestForm = formRef.current;
+      const latestAnswers = answersRef.current;
+      if (!latestForm.complaint.trim() || latestForm.complaint.trim().length < 6) {
+        return {
+          success: false,
+          error: "Need a brief description of the citizen's problem before drafting.",
+        };
+      }
+
+      const generated = await requestComplaintDraft(
+        latestForm,
+        latestAnswers,
+        requestedDraftLang || "English",
+        spokenLanguage || latestForm.language,
+      );
+
+      setDraftData(generated);
+      setEditableSubject(generated.subject);
+      setEditableDraft(generated.draft);
+      setDraftLanguage(generated.draftLanguage);
+      setActiveSavedId(null);
+      setStep("review");
+
+      draftDataRef.current = generated;
+      editableSubjectRef.current = generated.subject;
+      editableDraftRef.current = generated.draft;
+
+      const resolvedGuidance = resolvePortalGuidance(
+        latestForm.category,
+        latestForm.state,
+        resolveEffectiveDistrict(latestForm),
+        latestForm.complaint,
+        generated,
+        t.emergency112Note,
+        t.verificationDisclaimer,
+        spokenLanguage || latestForm.language,
+      );
+
+      showLiveToast(vf.toastDraftReady);
+
+      return {
+        success: true,
+        subject: generated.subject,
+        suggestedAuthority: generated.suggestedAuthority,
+        portalName: resolvedGuidance.primary.name,
+        portalUrl: resolvedGuidance.primary.url,
+        portalHelpline: resolvedGuidance.primary.helpline ?? "",
+        whyThisPortal: generated.whyThisPortal,
+        draftPreview: generated.draft.slice(0, 700),
+      };
+    },
+    [showLiveToast, t.emergency112Note, t.verificationDisclaimer, vf.toastDraftReady],
+  );
+
+  const handleLiveExecuteVoiceAction = useCallback(
+    async (action: string): Promise<LiveVoiceCommandResult> => {
+      const subject = editableSubjectRef.current.trim();
+      const draftText = editableDraftRef.current.trim();
+      const latestForm = formRef.current;
+      const guidance = portalGuidanceRef.current;
+
+      if (action === "end_voice_flow") {
+        if (draftDataRef.current) {
+          setDashboardTab("write");
+          setStep("review");
+        }
+        return { success: true, closed: true };
+      }
+
+      if (!draftText) {
+        return {
+          success: false,
+          error: "No official draft has been generated yet. Generate the draft first.",
+        };
+      }
+
+      if (action === "read_draft") {
+        return {
+          success: true,
+          instruction: "Read this official complaint letter clearly and warmly to the citizen.",
+          subject,
+          draft: draftText,
+        };
+      }
+
+      if (action === "download_pdf") {
+        downloadOfficialLetterPdf({
+          subject,
+          draftText,
+          portalName: guidance.primary.name,
+          referenceNumber: latestForm.referenceNumber.trim() || undefined,
+          attachments: attachmentsRef.current,
+          coSigners: coSignersRef.current,
+          filename: "makkalvoice-official-letter.pdf",
+        });
+        showLiveToast(vf.toastPdfDownloaded);
+        return { success: true, message: "Official A4 PDF has been downloaded." };
+      }
+
+      if (action === "copy_draft") {
+        const fullText = subject ? `Subject: ${subject}\n\n${draftText}` : draftText;
+        try {
+          await navigator.clipboard.writeText(fullText);
+        } catch {
+          // Ignore clipboard permission restrictions
+        }
+        showLiveToast(vf.toastCopied);
+        return { success: true, message: "Official letter copied to clipboard." };
+      }
+
+      if (action === "save_tracker") {
+        handleSaveToTracker();
+        showLiveToast(vf.toastSavedTracker);
+        return { success: true, message: "Saved to the citizen's Complaint Tracker." };
+      }
+
+      if (action === "share_whatsapp") {
+        await shareOfficialLetterPdf({
+          subject,
+          draftText,
+          portalName: guidance.primary.name,
+          referenceNumber: latestForm.referenceNumber.trim() || undefined,
+          attachments: attachmentsRef.current,
+          coSigners: coSignersRef.current,
+          filename: "makkalvoice-complaint-paper.pdf",
+        });
+        showLiveToast(vf.toastSharedWhatsapp);
+        return { success: true, message: "Prepared WhatsApp share with the official letter." };
+      }
+
+      return { success: false, error: `Unknown voice action: ${action}` };
+    },
+    [
+      handleSaveToTracker,
+      showLiveToast,
+      vf.toastCopied,
+      vf.toastPdfDownloaded,
+      vf.toastSavedTracker,
+      vf.toastSharedWhatsapp,
+    ],
+  );
+
+  const handleHeroStartSpeaking = () => {
+    handleOpenLiveVoiceFlow();
   };
 
   return (
@@ -1220,16 +1459,16 @@ export default function App() {
                     onClick={handleHeroStartSpeaking}
                     className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-sm transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
                   >
-                    <Mic className="w-5 h-5" aria-hidden="true" />
-                    {t.heroCta}
+                    <AudioLines className="w-5 h-5" aria-hidden="true" />
+                    {vf.launchHeroBtn}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => navigateToDashboardTab("portals", "how-it-works")}
+                    onClick={() => navigateToDashboardTab("write", "workspace")}
                     className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3.5 py-2.5 text-sm font-medium text-slate-800 hover:text-slate-950 bg-white/75 sm:bg-transparent rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
                   >
-                    {t.heroSecondary}
+                    {t.heroCta}
                     <ArrowDown className="w-4 h-4" aria-hidden="true" />
                   </button>
                 </div>
@@ -1399,6 +1638,7 @@ export default function App() {
                   voiceLiveTranscript={voiceTarget === "complaint" ? voiceRecorder.liveTranscript : ""}
                   speechSupported={speechSupported}
                   onToggleVoice={() => startVoiceInput("complaint")}
+                  onOpenLiveVoiceFlow={handleOpenLiveVoiceFlow}
                   speechOutputSupported={speechOutputSupported}
                   isReadingGuide={isReadingGuide}
                   onToggleReadGuide={handleToggleReadGuide}
@@ -1721,6 +1961,32 @@ export default function App() {
           </div>
         </div>
       </footer>
+
+      {/* Hands-Free Continuous Gemini Live Voice Flow Studio */}
+      <div className="no-print">
+        <LiveVoiceFlowModal
+          open={liveVoiceOpen}
+          onClose={() => setLiveVoiceOpen(false)}
+          t={t}
+          dashboardLanguage={form.language}
+          form={form}
+          draftData={draftData}
+          portalName={portalGuidance.primary.name}
+          actionToast={liveActionToast}
+          onIntakeUpdate={handleLiveIntakeUpdate}
+          onGenerateDraftCommand={handleLiveGenerateDraftCommand}
+          onExecuteVoiceAction={handleLiveExecuteVoiceAction}
+          onOpenDraftScreen={() => {
+            setDashboardTab("write");
+            if (draftDataRef.current) {
+              setStep("review");
+            }
+            requestAnimationFrame(() => {
+              document.getElementById("workspace")?.scrollIntoView({ behavior: "smooth" });
+            });
+          }}
+        />
+      </div>
 
       {/* Multi-turn Gemini Portal & Submission Assistant Chatbot */}
       <div className="no-print">

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import fs from "fs";
+import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
@@ -12,6 +13,7 @@ import {
 } from "./src/data/verifiedPortals.ts";
 import { INDIAN_STATES_AND_UTS } from "./src/data/indiaLocations.ts";
 import type { ComplaintCategory } from "./src/types.ts";
+import { attachLiveVoiceWebSocket, registerTtsRoute } from "./serverLiveVoice.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1707,6 +1709,9 @@ async function startServer() {
     }
   });
 
+  // API 7: Natural Regional Neural Voice Output (Gemini 3.8 Flash Lite TTS)
+  registerTtsRoute(app, getAiClient, mapGeminiError);
+
   // Mount Vite middleware in development or serve built dist in production
   const isProd = process.env.NODE_ENV === "production";
   const distDir = path.resolve(__dirname, "dist");
@@ -1801,7 +1806,10 @@ export class ErrorOverlay extends HTMLElement {}
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = http.createServer(app);
+  attachLiveVoiceWebSocket(httpServer, getAiClient, mapGeminiError);
+
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`MakkalVoice server running on http://0.0.0.0:${PORT}`);
   });
 }

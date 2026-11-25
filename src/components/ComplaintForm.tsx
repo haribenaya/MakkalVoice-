@@ -61,7 +61,6 @@ interface ComplaintFormProps {
   scanPreviewUrl: string | null;
   scanNotice: string | null;
   onGpsLocationResolved: (result: GpsLocationResult) => void;
-  autosaved: boolean;
   isOffline: boolean;
   offlineQueue: QueuedOfflineComplaint[];
   offlineQueueNotice: string | null;
@@ -100,7 +99,6 @@ export function ComplaintForm({
   scanPreviewUrl,
   scanNotice,
   onGpsLocationResolved,
-  autosaved,
   isOffline,
   offlineQueue,
   offlineQueueNotice,
@@ -153,15 +151,6 @@ export function ComplaintForm({
         <div>
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <p className="text-xs font-semibold text-blue-700">{t.step1Kicker}</p>
-            {autosaved && (
-              <>
-                <span aria-hidden="true" className="text-xs text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
-                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
-                  {it.autosavedBadge}
-                </span>
-              </>
-            )}
           </div>
           <h2
             id="describe-heading"
@@ -209,6 +198,7 @@ export function ComplaintForm({
 
       <form
         noValidate
+        autoComplete="off"
         className="mt-7 space-y-8"
         onSubmit={(e) => {
           e.preventDefault();
@@ -654,7 +644,7 @@ export function ComplaintForm({
                   type="text"
                   required
                   aria-required="true"
-                  autoComplete="name"
+                  autoComplete="off"
                   aria-invalid={Boolean(fieldErrors?.name)}
                   value={form.name}
                   onChange={(e) => onChange("name", e.target.value)}
@@ -698,7 +688,7 @@ export function ComplaintForm({
                   inputMode="tel"
                   required
                   aria-required="true"
-                  autoComplete="tel"
+                  autoComplete="off"
                   aria-invalid={Boolean(fieldErrors?.contact)}
                   value={form.contact}
                   onChange={(e) => onChange("contact", e.target.value)}

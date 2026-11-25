@@ -70,10 +70,8 @@ import {
 import {
   clearAutosavedForm,
   defaultReminderDateIso,
-  loadAutosavedForm,
   loadSavedComplaints,
   persistSavedComplaints,
-  saveAutosavedForm,
 } from "./utils/storage";
 
 const HERO_IMAGE_PATH = "/src/assets/images/hero_makkalvoice_1795284698438.jpg";
@@ -82,10 +80,10 @@ const HERO_BANNER_PATH = "/src/assets/images/civic_voice_backdrop_1795320159387.
 const INITIAL_FORM: ComplaintFormState = {
   mode: "complaint",
   previousTicketId: "",
-  language: "Tamil",
+  language: "English",
   category: "Civic Issues",
-  state: "Tamil Nadu",
-  district: "Chennai",
+  state: "",
+  district: "",
   customDistrict: "",
   town: "",
   street: "",
@@ -131,12 +129,8 @@ function persistOfflineQueue(items: QueuedOfflineComplaint[]): void {
 }
 
 export default function App() {
-  const [form, setForm] = useState<ComplaintFormState>(() => {
-    const saved = loadAutosavedForm();
-    return saved ? { ...INITIAL_FORM, ...saved } : INITIAL_FORM;
-  });
+  const [form, setForm] = useState<ComplaintFormState>(INITIAL_FORM);
   const [step, setStep] = useState<StepId>("describe");
-  const [autosaved, setAutosaved] = useState(false);
 
   // Clarify state
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -257,21 +251,11 @@ export default function App() {
     return () => window.removeEventListener("gmp-quota-exceeded", onQuota);
   }, []);
 
-  // Innovation 6: Automatic Offline Form Auto-Save in localStorage
+  // Privacy & Fresh-Start Guarantee: Always start with a blank form on reopen
+  // and immediately wipe any legacy autosaved form data from previous visits.
   useEffect(() => {
-    const hasContent =
-      form.complaint.trim().length > 0 ||
-      form.name.trim().length > 0 ||
-      form.contact.trim().length > 0 ||
-      form.town.trim().length > 0 ||
-      form.street.trim().length > 0;
-    if (!hasContent) return;
-    const timer = setTimeout(() => {
-      saveAutosavedForm(form);
-      setAutosaved(true);
-    }, 450);
-    return () => clearTimeout(timer);
-  }, [form]);
+    clearAutosavedForm();
+  }, []);
 
   // Persist Complaint Tracker updates
   useEffect(() => {
@@ -475,7 +459,6 @@ export default function App() {
     stopVoiceInput();
     handleStopSpeaking();
     clearAutosavedForm();
-    setAutosaved(false);
     setForm((prev) => ({
       ...INITIAL_FORM,
       language: prev.language,
@@ -1408,7 +1391,6 @@ export default function App() {
                   scanPreviewUrl={scanPreviewUrl}
                   scanNotice={scanNotice}
                   onGpsLocationResolved={handleGpsLocationResolved}
-                  autosaved={autosaved}
                   busy={busy}
                   isListening={voiceRecorder.isRecording && voiceTarget === "complaint"}
                   isTranscribing={voiceRecorder.isTranscribing && voiceTarget === "complaint"}

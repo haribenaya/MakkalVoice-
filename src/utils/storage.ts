@@ -1,33 +1,14 @@
-import type { ComplaintFormState, SavedComplaintRecord } from "../types";
+import type { SavedComplaintRecord } from "../types";
 
 const AUTOSAVE_KEY = "makkalvoice_draft_autosave_v1";
 const TRACKER_KEY = "makkalvoice_saved_complaints_v1";
 
-export function loadAutosavedForm(): Partial<ComplaintFormState> | null {
-  try {
-    const raw = window.localStorage.getItem(AUTOSAVE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<ComplaintFormState>;
-    if (!parsed || typeof parsed !== "object") return null;
-    return parsed;
-  } catch {
-    return null;
-  }
-}
-
-export function saveAutosavedForm(form: ComplaintFormState): void {
-  try {
-    window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(form));
-  } catch {
-    // Ignore storage quota / private browsing errors
-  }
-}
-
+/** Purges any legacy autosaved form draft from earlier visits so the form always starts clean. */
 export function clearAutosavedForm(): void {
   try {
     window.localStorage.removeItem(AUTOSAVE_KEY);
   } catch {
-    // Ignore
+    // Ignore storage access errors
   }
 }
 

@@ -1786,8 +1786,17 @@ export class ErrorOverlay extends HTMLElement {}
 
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(distDir));
+    app.use(
+      express.static(distDir, {
+        setHeaders(res, filePath) {
+          if (filePath.endsWith("index.html") || filePath.endsWith("sw.js")) {
+            res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          }
+        },
+      }),
+    );
     app.get("*", (_req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.sendFile(path.join(distDir, "index.html"));
     });
   }

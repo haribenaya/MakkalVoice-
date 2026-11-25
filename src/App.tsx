@@ -29,7 +29,11 @@ import {
 } from "./data/languages";
 import { getLocalizedDistrictName, getLocalizedStateName } from "./data/localizedLocations";
 import { resolveLocalizedErrorMessage } from "./data/localizedErrors";
-import { localizePortalEntry, PORTAL_LANGUAGE_SUPPORT } from "./data/localizedPortals";
+import {
+  getLocalizedSampleComplaint,
+  localizePortalEntry,
+  PORTAL_LANGUAGE_SUPPORT,
+} from "./data/localizedPortals";
 import { FEATURED_OFFICIAL_PORTALS, resolvePortalGuidance } from "./data/portals";
 import { getSubmissionStrings } from "./data/submissionTranslations";
 import { getUiStrings } from "./data/translations";
@@ -454,14 +458,13 @@ export default function App() {
     setForm((prev) => ({
       ...prev,
       mode: "complaint",
-      language: sample.language,
       category: sample.category,
       state: sample.state,
       district: sample.district,
       customDistrict: "",
       town: sample.town,
       street: sample.street,
-      complaint: sample.complaint,
+      complaint: getLocalizedSampleComplaint(sampleIndex, prev.language, sample.complaint),
     }));
     setErrorMessage(null);
     setFieldErrors({});
@@ -516,7 +519,7 @@ export default function App() {
   const handleLoadOfflineItem = (item: QueuedOfflineComplaint) => {
     stopVoiceInput();
     handleStopSpeaking();
-    setForm({ ...INITIAL_FORM, ...item.form });
+    setForm((prev) => ({ ...INITIAL_FORM, ...item.form, language: prev.language }));
     setOfflineQueue((prev) => prev.filter((q) => q.id !== item.id));
     setErrorMessage(null);
     setFieldErrors({});
@@ -547,7 +550,9 @@ export default function App() {
         setIsReadingGuide(true);
       },
       () => setIsReadingGuide(false),
-      (msg) => setErrorMessage(msg),
+      (msg) => {
+        if (msg) setErrorMessage(msg);
+      },
     );
   };
 
@@ -578,7 +583,9 @@ export default function App() {
         locale,
         () => setSpeakingMessageId(id),
         () => setSpeakingMessageId(null),
-        (msg) => setErrorMessage(msg),
+        (msg) => {
+          if (msg) setErrorMessage(msg);
+        },
       );
     },
     [form.language, stopVoiceInput],
@@ -830,7 +837,7 @@ export default function App() {
       mode: form.mode,
       language: form.language,
       category: form.category,
-      subject: editableSubject.trim() || "Public Grievance Draft",
+      subject: editableSubject.trim() || t.step3Heading,
       draft: editableDraft.trim(),
       state: form.state,
       district: effectiveDistrict,
@@ -875,12 +882,16 @@ export default function App() {
       pincode: record.pincode,
       referenceNumber: record.referenceNumber,
     }));
+    const detectedDraftLang =
+      /[^\u0000-\u024F\u2000-\u206F]/.test(record.draft) && record.language
+        ? record.language
+        : "English";
     setDraftData({
       subject: record.subject,
       draft: record.draft,
       suggestedAuthority: record.portalName,
       summaryPoints: [],
-      draftLanguage: "English",
+      draftLanguage: detectedDraftLang,
       primaryPortalId: "cpgrams",
       whyThisPortal: "",
       filingSteps: [],
@@ -888,7 +899,7 @@ export default function App() {
     });
     setEditableSubject(record.subject);
     setEditableDraft(record.draft);
-    setDraftLanguage("English");
+    setDraftLanguage(detectedDraftLang);
     setActiveSavedId(record.id);
     setDashboardTab("write");
     setStep("review");
@@ -952,7 +963,19 @@ export default function App() {
         "English",
         form.language,
       );
-      setForm(rtiForm);
+      setForm((prev) => ({
+        ...prev,
+        mode: "rti",
+        previousTicketId: rtiForm.previousTicketId,
+        category: rtiForm.category,
+        state: rtiForm.state,
+        district: rtiForm.district,
+        customDistrict: "",
+        town: rtiForm.town,
+        street: rtiForm.street,
+        pincode: rtiForm.pincode,
+        referenceNumber: rtiForm.referenceNumber,
+      }));
       setDraftData(rtiDraft);
       setEditableSubject(rtiDraft.subject);
       setEditableDraft(rtiDraft.draft);

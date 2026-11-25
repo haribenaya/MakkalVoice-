@@ -63,18 +63,18 @@ export interface SampleScenario {
 
 export const SAMPLE_SCENARIOS: SampleScenario[] = [
   {
-    label: "Drainage overflow (Tamil / Chennai)",
-    language: "Tamil",
+    label: "Drainage overflow (Chennai)",
+    language: "English",
     category: "Civic Issues",
     state: "Tamil Nadu",
     district: "Chennai",
     town: "Velachery",
     street: "3rd Main Road, Vijaya Nagar",
     complaint:
-      "எங்கள் தெருவில் கடந்த இரண்டு நாட்களாக கழிவுநீர் சாலை முழுவதும் வழிந்து ஓடுகிறது. நடந்து செல்லவும் வாகனங்கள் செல்லவும் மிகவும் சிரமமாக உள்ளது.",
+      "Sewage and drainage water has been overflowing across our entire street for the past two days. It has become very difficult and unhygienic for pedestrians and vehicles to pass.",
   },
   {
-    label: "Street lights out (English / Bengaluru)",
+    label: "Street lights not working (Bengaluru)",
     language: "English",
     category: "Civic Issues",
     state: "Karnataka",
@@ -85,14 +85,14 @@ export const SAMPLE_SCENARIOS: SampleScenario[] = [
       "Five consecutive street lights along our stretch have not been working for the past four nights, making the road dark and unsafe for pedestrians and senior citizens.",
   },
   {
-    label: "Excess electricity bill (Hindi / Pune)",
-    language: "Hindi",
+    label: "Excessive electricity bill (Pune)",
+    language: "English",
     category: "Consumer Complaints",
     state: "Maharashtra",
     district: "Pune",
     town: "Kothrud",
     street: "Paud Road, Sector B",
     complaint:
-      "इस महीने का बिजली बिल सामान्य से तीन गुना अधिक आया है जबकि मीटर रीडिंग पिछले महीने जैसी ही है। कृपया बिल की जांच और सुधार किया जाए।",
+      "This month's electricity bill is three times higher than normal even though our meter reading and household usage are similar to last month. Please inspect and revise the bill.",
   },
 ];

@@ -13,6 +13,7 @@ import { fetchMapsApiKey, requestReverseGeocode } from "../utils/api";
 
 interface LocationPinpointPickerProps {
   it: InnovationStrings;
+  language: string;
   lat?: number;
   lng?: number;
   disabled?: boolean;
@@ -24,6 +25,7 @@ const DEFAULT_CENTER = { lat: 13.0827, lng: 80.2707 };
 
 export function LocationPinpointPicker({
   it,
+  language,
   lat,
   lng,
   disabled,
@@ -75,12 +77,16 @@ export function LocationPinpointPicker({
             : it.locationDetectedSuccess,
         );
       } catch (err) {
-        setErrorText(err instanceof Error ? err.message : it.locationUnavailable);
+        setErrorText(
+          language === "English" && err instanceof Error && err.message.trim()
+            ? err.message
+            : it.locationUnavailable,
+        );
       } finally {
         setDetecting(false);
       }
     },
-    [it.locationDetectedSuccess, it.locationUnavailable, onLocationResolved],
+    [it.locationDetectedSuccess, it.locationUnavailable, language, onLocationResolved],
   );
 
   const handleDetectCurrentLocation = () => {

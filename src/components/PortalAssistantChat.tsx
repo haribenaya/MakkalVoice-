@@ -10,7 +10,7 @@ import {
   VolumeX,
   X,
 } from "lucide-react";
-import { LANGUAGE_LOCALE_MAP } from "../data/languages";
+import { LANGUAGES, LANGUAGE_LOCALE_MAP } from "../data/languages";
 import { getLocalizedError } from "../data/localizedErrors";
 import type { SubmissionUiStrings } from "../data/submissionTranslations";
 import { useVoiceRecorder } from "../hooks/useVoiceRecorder";
@@ -69,7 +69,8 @@ export function PortalAssistantChat({
         return `${trimmedPrev} ${cleanedSpoken}`;
       });
     },
-    onError: (msg) => setVoiceError(msg || voiceUnsupportedText || "Voice input failed."),
+    onError: (msg) =>
+      setVoiceError(msg || voiceUnsupportedText || getLocalizedError("MIC_GENERIC", language)),
   });
 
   const speechInputSupported = recorder.isSupported;
@@ -185,7 +186,9 @@ export function PortalAssistantChat({
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="font-medium text-blue-700">{st.chatRoleLabel}</span>
                 <span aria-hidden="true">·</span>
-                <span className="truncate">{language}</span>
+                <span className="truncate">
+                  {LANGUAGES.find((l) => l.name === language)?.nativeLabel ?? language}
+                </span>
               </div>
               <h2 className="mt-0.5 text-base font-semibold text-slate-950 truncate">
                 {st.chatTitle}

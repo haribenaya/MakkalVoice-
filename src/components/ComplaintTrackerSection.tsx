@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { getDashboardExtrasStrings } from "../data/dashboardExtrasTranslations";
 import type { InnovationStrings } from "../data/innovationTranslations";
-import { getLocalizedStateName } from "../data/localizedLocations";
+import { getLocalizedDistrictName, getLocalizedStateName } from "../data/localizedLocations";
 import type { SavedComplaintRecord, SavedComplaintStatus } from "../types";
 import {
   buildGoogleCalendarReminderUrl,
@@ -217,7 +217,7 @@ export function ComplaintTrackerSection({
                         <p className="mt-0.5 text-xs text-slate-500">
                           {[
                             rec.town,
-                            rec.district,
+                            rec.district ? getLocalizedDistrictName(rec.district, language) : "",
                             rec.state ? getLocalizedStateName(rec.state, language) : "",
                           ]
                             .filter(Boolean)

@@ -73,7 +73,7 @@ export function speakText(
   onError?: (msg: string) => void,
 ): void {
   if (!isSpeechSynthesisSupported()) {
-    onError?.("Read-aloud voice output is not supported in this browser.");
+    onEnd?.();
     return;
   }
 
@@ -95,15 +95,20 @@ export function speakText(
 
     utterance.onstart = () => onStart?.();
     utterance.onend = () => onEnd?.();
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
       onEnd?.();
-      onError?.("Could not play audio in this language on your browser.");
+      // Stopping or replacing speech fires "canceled" / "interrupted" — never treat as an error
+      const code = (event as SpeechSynthesisErrorEvent)?.error;
+      if (code === "canceled" || code === "interrupted") {
+        return;
+      }
+      onError?.("");
     };
 
     window.speechSynthesis.speak(utterance);
   } catch {
     onEnd?.();
-    onError?.("Could not start speech playback.");
+    onError?.("");
   }
 }
 

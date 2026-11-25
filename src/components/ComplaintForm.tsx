@@ -440,6 +440,7 @@ export function ComplaintForm({
 
           <LocationPinpointPicker
             it={it}
+            language={form.language}
             lat={form.gpsLat}
             lng={form.gpsLng}
             disabled={busy}

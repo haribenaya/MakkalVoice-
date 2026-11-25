@@ -168,6 +168,10 @@ export function DraftReview({
   const dx = getDashboardExtrasStrings(userLanguage);
   const userNativeLangLabel =
     LANGUAGES.find((l) => l.name === userLanguage)?.nativeLabel ?? userLanguage;
+  const draftLanguageLabel =
+    draftLanguage === "English"
+      ? t.formalEnglish
+      : (LANGUAGES.find((l) => l.name === draftLanguage)?.nativeLabel ?? draftLanguage);
   const hasDirectEmail = Boolean(portalGuidance.primary.officialEmail);
   const hasDirectWhatsApp = Boolean(portalGuidance.primary.officialWhatsApp);
   const hasDirectChannel = hasDirectEmail || hasDirectWhatsApp;
@@ -377,11 +381,11 @@ export function DraftReview({
       <article className="hidden print-only-sheet text-black bg-white">
         <div className="border-b-2 border-slate-900 pb-3 mb-5">
           <h1 className="text-lg font-bold tracking-tight">
-            {subject.trim() || "OFFICIAL CITIZEN PETITION"}
+            {subject.trim() || t.step3Heading}
           </h1>
           <p className="mt-1 text-xs text-slate-600">
             {portalGuidance.primary.name}
-            {form.referenceNumber.trim() ? ` · Ref: ${form.referenceNumber.trim()}` : ""}
+            {form.referenceNumber.trim() ? ` · ${st.referenceNumberLabel}: ${form.referenceNumber.trim()}` : ""}
           </p>
         </div>
         <div className="whitespace-pre-wrap text-[12pt] leading-relaxed font-sans">
@@ -390,7 +394,7 @@ export function DraftReview({
         {coSigners.length > 0 && (
           <div className="mt-6 pt-4 border-t border-slate-300">
             <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 mb-2">
-              Joint Citizen Co-Signatories ({coSigners.length})
+              {dx.coSignersTitle} ({coSigners.length})
             </h2>
             <ol className="list-decimal list-inside space-y-1 text-sm text-slate-900">
               {coSigners.map((cs) => (
@@ -426,7 +430,7 @@ export function DraftReview({
             <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
               <span className="font-semibold text-blue-700">{t.step3Kicker}</span>
               <span aria-hidden="true">·</span>
-              <span>{draftLanguage}</span>
+              <span>{draftLanguageLabel}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono tabular-nums">
                 {wordCount} {t.wordsLabel}

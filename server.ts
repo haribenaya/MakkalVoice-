@@ -17,13 +17,13 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = "gemini-3.1-flash-lite";
-const FAST_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
-const DRAFT_TEXT_MODELS = ["gemini-3.1-flash-lite", "gemini-4-hydrogen"] as const;
+const MODEL_NAME = "gemini-4-hydrogen";
+const FAST_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
+const DRAFT_TEXT_MODELS = ["gemini-4-hydrogen", "gemini-3.1-flash-lite"] as const;
 const TRANSCRIBE_MODELS = [
   "gemini-3.5-transcribe",
-  "gemini-3.1-flash-lite",
   "gemini-4-hydrogen",
+  "gemini-3.1-flash-lite",
 ] as const;
 const REQUEST_TIMEOUT_MS = 22_000;
 const ATTEMPT_TIMEOUT_MS = 14_000;
@@ -395,7 +395,7 @@ async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
   attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
-  maxRounds = 2,
+  maxRounds = 3,
 ): Promise<T> {
   if (models.length === 0) {
     throw new Error("No AI models configured.");
@@ -404,10 +404,7 @@ async function generateWithFailover<T>(
   let lastError: unknown;
 
   for (let round = 0; round < maxRounds; round += 1) {
-    const candidateModels =
-      round === 0
-        ? selectModelsForAttempt(models)
-        : selectModelsForAttempt(models).slice(0, 1);
+    const candidateModels = selectModelsForAttempt(models);
     let sawOnlyRateLimits = true;
 
     for (const model of candidateModels) {
@@ -434,10 +431,10 @@ async function generateWithFailover<T>(
           throw err;
         }
 
-        // Cool down overloaded or rate-limited model so subsequent calls route directly to healthy backup
+        // Cool down overloaded or rate-limited model so subsequent calls route to healthy backup first
         if (isQuotaOrBusyError(err)) {
           const retryHint = extractRetryAfterMs(err);
-          const defaultCooldown = rateLimited ? 55_000 : 40_000;
+          const defaultCooldown = rateLimited ? 55_000 : 15_000;
           const cooldownMs = retryHint ? Math.max(retryHint, defaultCooldown) : defaultCooldown;
           modelCooldownUntil.set(model, Date.now() + cooldownMs);
         }
@@ -458,7 +455,8 @@ async function generateWithFailover<T>(
     }
 
     if (round < maxRounds - 1) {
-      const waitMs = 1200 + Math.floor(Math.random() * 400);
+      const baseWait = round === 0 ? 1100 : 2300;
+      const waitMs = baseWait + Math.floor(Math.random() * 450);
       await new Promise((res) => setTimeout(res, waitMs));
     }
   }
@@ -1051,10 +1049,17 @@ async function startServer() {
         return;
       }
 
-      const ai = getAiClient();
-
       const mode = normalizeSubmissionMode(body.mode);
       const previousTicketId = cleanText(body.previousTicketId, 100);
+
+      const followupCacheKey = `followup:${mode}:${language}:${category}:${locationSummary}:${complaint.toLowerCase()}:${answers.map((a) => `${a.question}=${a.answer}`).join("|")}:${askedQuestions.join("|")}`;
+      const cachedFollowup = getCachedAiResponse<{ complete: boolean; question: string; reason: string }>(followupCacheKey);
+      if (cachedFollowup) {
+        res.json(cachedFollowup);
+        return;
+      }
+
+      const ai = getAiClient();
 
       const buildPrompt = (extraAvoidInstruction = "") => {
         const qaBlock =
@@ -1164,6 +1169,7 @@ async function startServer() {
         }
       }
 
+      setCachedAiResponse(followupCacheKey, result);
       res.json(result);
     } catch (error) {
       console.error("[/api/complaint-followup] error:", error);

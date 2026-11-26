@@ -4,13 +4,16 @@ import {
   AudioLines,
   CheckCircle2,
   Circle,
+  FileCheck2,
   FileText,
   Globe,
   Loader2,
+  MapPin,
   Mic,
   MicOff,
   PhoneOff,
   RefreshCw,
+  User,
   Volume2,
   X,
 } from "lucide-react";
@@ -27,6 +30,7 @@ import type {
 import { useLiveVoiceFlow } from "../hooks/useLiveVoiceFlow";
 import type { ComplaintFormState, DraftResponse } from "../types";
 import { resolveEffectiveDistrict } from "../utils/api";
+import { getCategoryIcon } from "../utils/civicIcons";
 
 interface LiveVoiceFlowModalProps {
   open: boolean;
@@ -346,38 +350,49 @@ export function LiveVoiceFlowModal({
 
               <div className="mt-3.5 space-y-3">
                 {/* 1. Problem & Category */}
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
-                    {hasProblem ? (
-                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
-                    ) : (
-                      <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
-                    )}
-                    <span>{vf.fieldProblem}</span>
-                  </div>
-                  {hasProblem ? (
-                    <div className="mt-1.5 ps-6 space-y-1">
-                      <p className="text-[11px] font-medium text-blue-800">
-                        {t.categories[form.category] ?? form.category}
-                      </p>
-                      <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed">
-                        {form.complaint}
-                      </p>
+                {(() => {
+                  const ProblemCatIcon = getCategoryIcon(form.category);
+                  return (
+                    <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
+                      <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
+                        <span className="inline-flex items-center gap-2">
+                          <ProblemCatIcon className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                          <span>{vf.fieldProblem}</span>
+                        </span>
+                        {hasProblem ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
+                        )}
+                      </div>
+                      {hasProblem ? (
+                        <div className="mt-1.5 ps-6 space-y-1">
+                          <p className="text-[11px] font-medium text-blue-800">
+                            {t.categories[form.category] ?? form.category}
+                          </p>
+                          <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed">
+                            {form.complaint}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="mt-1 ps-6 text-xs text-slate-400">{vf.waitingToHear}</p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="mt-1 ps-6 text-xs text-slate-400">{vf.waitingToHear}</p>
-                  )}
-                </div>
+                  );
+                })()}
 
                 {/* 2. Location */}
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
+                    <span className="inline-flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                      <span>{vf.fieldLocation}</span>
+                    </span>
                     {hasLocation ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
                     ) : (
                       <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
                     )}
-                    <span>{vf.fieldLocation}</span>
                   </div>
                   <p
                     className={`mt-1 ps-6 text-xs leading-relaxed ${
@@ -390,13 +405,16 @@ export function LiveVoiceFlowModal({
 
                 {/* 3. Citizen Name & Phone */}
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
+                    <span className="inline-flex items-center gap-2">
+                      <User className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                      <span>{vf.fieldContact}</span>
+                    </span>
                     {hasContact ? (
                       <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
                     ) : (
                       <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
                     )}
-                    <span>{vf.fieldContact}</span>
                   </div>
                   {form.name.trim() || form.contact.trim() ? (
                     <p className="mt-1 ps-6 text-xs text-slate-700 font-mono tabular-nums">
@@ -415,13 +433,19 @@ export function LiveVoiceFlowModal({
                       : "bg-white border-slate-200/90"
                   }`}
                 >
-                  <div className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                  <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-900">
+                    <span className="inline-flex items-center gap-2">
+                      <FileCheck2
+                        className={`w-4 h-4 shrink-0 ${hasDraft ? "text-emerald-700" : "text-blue-700"}`}
+                        aria-hidden="true"
+                      />
+                      <span>{vf.fieldDraft}</span>
+                    </span>
                     {hasDraft ? (
-                      <FileText className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                      <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
                     ) : (
                       <Circle className="w-4 h-4 text-slate-300 shrink-0" aria-hidden="true" />
                     )}
-                    <span>{vf.fieldDraft}</span>
                   </div>
                   {hasDraft && draftData ? (
                     <div className="mt-1.5 ps-6 space-y-1">

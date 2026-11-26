@@ -6,11 +6,14 @@ import {
   BookmarkCheck,
   Check,
   ExternalLink,
+  FileCheck2,
   FileEdit,
   Globe,
   Landmark,
+  MessageSquare,
   Mic,
   PhoneCall,
+  Send,
   Shield,
   X,
 } from "lucide-react";
@@ -68,6 +71,7 @@ import {
   downloadOfficialLetterPdf,
   shareOfficialLetterPdf,
 } from "./utils/mediaTools";
+import { getHelplineIcon, getPortalIcon } from "./utils/civicIcons";
 import type { LiveIntakePatch, LiveVoiceCommandResult } from "./hooks/useLiveVoiceFlow";
 import { useVoiceRecorder } from "./hooks/useVoiceRecorder";
 import {
@@ -1591,18 +1595,38 @@ export default function App() {
                       <div className="flex items-center gap-1.5 sm:gap-2.5">
                         {isCompleted ? (
                           <Check
-                            className="w-3.5 h-3.5 text-emerald-600 shrink-0"
+                            className="w-4 h-4 text-emerald-600 shrink-0"
+                            aria-hidden="true"
+                          />
+                        ) : s.id === "describe" ? (
+                          <Mic
+                            className={`w-4 h-4 shrink-0 ${
+                              isCurrent ? "text-blue-300" : "text-slate-400"
+                            }`}
+                            aria-hidden="true"
+                          />
+                        ) : s.id === "clarify" ? (
+                          <MessageSquare
+                            className={`w-4 h-4 shrink-0 ${
+                              isCurrent ? "text-blue-300" : "text-slate-400"
+                            }`}
                             aria-hidden="true"
                           />
                         ) : (
-                          <span
-                            className={`font-mono text-xs tabular-nums shrink-0 ${
+                          <FileCheck2
+                            className={`w-4 h-4 shrink-0 ${
                               isCurrent ? "text-blue-300" : "text-slate-400"
                             }`}
-                          >
-                            {s.number}
-                          </span>
+                            aria-hidden="true"
+                          />
                         )}
+                        <span
+                          className={`hidden sm:inline font-mono text-xs tabular-nums shrink-0 ${
+                            isCurrent ? "text-blue-300" : "text-slate-400"
+                          }`}
+                        >
+                          {s.number}
+                        </span>
                         <span className="text-xs sm:text-sm font-medium truncate">
                           {s.label}
                         </span>
@@ -1769,27 +1793,35 @@ export default function App() {
                     { number: "139", label: dx.helplineRailway },
                     { number: "181", label: dx.helplineWomen },
                     { number: "1098", label: dx.helplineChild },
-                  ].map((item) => (
-                    <a
-                      key={item.number}
-                      href={`tel:${item.number}`}
-                      aria-label={`${dx.tapToCallLabel} ${item.number} — ${item.label}`}
-                      className="group min-h-[96px] flex flex-col justify-between p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-blue-50/60 hover:border-blue-300 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-lg font-bold tracking-tight tabular-nums text-slate-950 group-hover:text-blue-800">
-                          {item.number}
-                        </span>
-                        <PhoneCall
-                          className="w-4 h-4 text-blue-700 shrink-0"
-                          aria-hidden="true"
-                        />
-                      </div>
-                      <span className="mt-2 text-xs font-medium text-slate-700 leading-snug line-clamp-2">
-                        {item.label}
-                      </span>
-                    </a>
-                  ))}
+                  ].map((item) => {
+                    const HelplineIcon = getHelplineIcon(item.number);
+                    return (
+                      <a
+                        key={item.number}
+                        href={`tel:${item.number}`}
+                        aria-label={`${dx.tapToCallLabel} ${item.number} — ${item.label}`}
+                        className="group min-h-[104px] flex flex-col justify-between p-3.5 rounded-xl border border-slate-200/90 bg-slate-50/70 hover:bg-blue-50/60 hover:border-blue-300 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white border border-slate-200/90 text-blue-700 group-hover:border-blue-200 shrink-0">
+                            <HelplineIcon className="w-4 h-4" aria-hidden="true" />
+                          </span>
+                          <PhoneCall
+                            className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-700 shrink-0"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <div className="mt-2.5">
+                          <span className="block font-mono text-lg font-bold tracking-tight tabular-nums text-slate-950 group-hover:text-blue-800">
+                            {item.number}
+                          </span>
+                          <span className="mt-0.5 block text-xs font-medium text-slate-700 leading-snug line-clamp-2">
+                            {item.label}
+                          </span>
+                        </div>
+                      </a>
+                    );
+                  })}
                 </div>
               </section>
 
@@ -1819,16 +1851,25 @@ export default function App() {
                             ? st.portalLangMultiIndian
                             : st.portalLangEnglishOnly;
 
+                    const PortalIcon = getPortalIcon(rawPortal.id);
+
                     return (
                       <div
                         key={portal.url}
                         className="bg-slate-50/60 border border-slate-200/90 rounded-xl p-4 sm:p-5 flex flex-col justify-between hover:border-slate-300 transition-colors"
                       >
                         <div>
-                          <p className="text-xs text-slate-500">{portal.authorityScope}</p>
-                          <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
-                            {portal.name}
-                          </h3>
+                          <div className="flex items-start gap-3">
+                            <span className="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-slate-200 text-blue-700 shrink-0 mt-0.5">
+                              <PortalIcon className="w-4 h-4" aria-hidden="true" />
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-xs text-slate-500">{portal.authorityScope}</p>
+                              <h3 className="mt-0.5 font-display text-base font-semibold text-slate-950">
+                                {portal.name}
+                              </h3>
+                            </div>
+                          </div>
                           <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">
                             {portal.description}
                           </p>
@@ -1875,16 +1916,25 @@ export default function App() {
 
                 <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="pt-4 border-t border-slate-200">
+                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-700 mb-3">
+                      <AudioLines className="w-4 h-4" aria-hidden="true" />
+                    </span>
                     <h3 className="text-base font-semibold text-slate-900">{t.how1Title}</h3>
                     <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how1Desc}</p>
                   </div>
 
                   <div className="pt-4 border-t border-slate-200">
+                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-700 mb-3">
+                      <MessageSquare className="w-4 h-4" aria-hidden="true" />
+                    </span>
                     <h3 className="text-base font-semibold text-slate-900">{t.how2Title}</h3>
                     <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how2Desc}</p>
                   </div>
 
                   <div className="pt-4 border-t border-slate-200">
+                    <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50 text-blue-700 mb-3">
+                      <Send className="w-4 h-4" aria-hidden="true" />
+                    </span>
                     <h3 className="text-base font-semibold text-slate-900">{t.how3Title}</h3>
                     <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{t.how3Desc}</p>
                   </div>

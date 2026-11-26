@@ -21,6 +21,7 @@ import {
   buildGoogleCalendarReminderUrl,
   downloadFollowUpCalendarIcs,
 } from "../utils/mediaTools";
+import { getCategoryIcon } from "../utils/civicIcons";
 
 interface ComplaintTrackerSectionProps {
   it: InnovationStrings;
@@ -188,6 +189,7 @@ export function ComplaintTrackerSection({
               const isEscalating = escalatingId === rec.id;
               const isDraftingRti = rtiDraftingId === rec.id;
               const isAnyBusy = Boolean(escalatingId || rtiDraftingId);
+              const RecordCatIcon = getCategoryIcon(rec.category);
 
               return (
                 <article
@@ -195,35 +197,40 @@ export function ComplaintTrackerSection({
                   className="bg-white border border-slate-200/90 rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04)] p-5 space-y-4"
                 >
                   <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 pb-3.5 border-b border-slate-100">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        <span className="font-mono tabular-nums">{rec.createdAt}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{rec.portalName}</span>
-                        {dueForFollowup && (
-                          <>
-                            <span aria-hidden="true">·</span>
-                            <span className="inline-flex items-center gap-1 font-medium text-amber-800">
-                              <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                              {it.overdueReminderBadge}
-                            </span>
-                          </>
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-50/80 border border-blue-100 text-blue-700 shrink-0 mt-0.5">
+                        <RecordCatIcon className="w-4 h-4" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span className="font-mono tabular-nums">{rec.createdAt}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{rec.portalName}</span>
+                          {dueForFollowup && (
+                            <>
+                              <span aria-hidden="true">·</span>
+                              <span className="inline-flex items-center gap-1 font-medium text-amber-800">
+                                <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                                {it.overdueReminderBadge}
+                              </span>
+                            </>
+                          )}
+                        </div>
+                        <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
+                          {rec.subject}
+                        </h3>
+                        {(rec.district || rec.state) && (
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {[
+                              rec.town,
+                              rec.district ? getLocalizedDistrictName(rec.district, language) : "",
+                              rec.state ? getLocalizedStateName(rec.state, language) : "",
+                            ]
+                              .filter(Boolean)
+                              .join(", ")}
+                          </p>
                         )}
                       </div>
-                      <h3 className="mt-1 font-display text-base font-semibold text-slate-950">
-                        {rec.subject}
-                      </h3>
-                      {(rec.district || rec.state) && (
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          {[
-                            rec.town,
-                            rec.district ? getLocalizedDistrictName(rec.district, language) : "",
-                            rec.state ? getLocalizedStateName(rec.state, language) : "",
-                          ]
-                            .filter(Boolean)
-                            .join(", ")}
-                        </p>
-                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 shrink-0">

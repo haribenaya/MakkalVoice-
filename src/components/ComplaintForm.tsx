@@ -38,6 +38,11 @@ import type {
   QueuedOfflineComplaint,
   SubmissionMode,
 } from "../types";
+import {
+  getCategoryIcon,
+  getSampleScenarioIcon,
+  getSubmissionModeIcon,
+} from "../utils/civicIcons";
 import { LocationPinpointPicker } from "./LocationPinpointPicker";
 
 export interface ComplaintFieldErrors {
@@ -423,20 +428,24 @@ export function ComplaintForm({
             </div>
           </div>
 
-          {/* Quick Starter Examples */}
+          {/* Quick Starter Examples with intuitive symbols */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-600">
             <span className="font-medium text-slate-500">{t.tryExample}</span>
-            {SAMPLE_SCENARIOS.map((sample, idx) => (
-              <button
-                key={sample.label}
-                type="button"
-                disabled={busy}
-                onClick={() => onApplySample(idx)}
-                className="text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
-              >
-                {getLocalizedSampleLabel(idx, form.language, sample.label)}
-              </button>
-            ))}
+            {SAMPLE_SCENARIOS.map((sample, idx) => {
+              const SampleIcon = getSampleScenarioIcon(idx);
+              return (
+                <button
+                  key={sample.label}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onApplySample(idx)}
+                  className="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-900 underline underline-offset-4 decoration-blue-300 hover:decoration-blue-700 transition-colors whitespace-nowrap disabled:opacity-50"
+                >
+                  <SampleIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                  <span>{getLocalizedSampleLabel(idx, form.language, sample.label)}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -465,29 +474,49 @@ export function ComplaintForm({
             onLocationResolved={onGpsLocationResolved}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label
-                htmlFor="category-select"
-                className="block text-sm font-medium text-slate-800"
-              >
-                {t.categoryLabel}
-              </label>
-              <select
-                id="category-select"
-                value={form.category}
-                onChange={(e) => onChange("category", e.target.value as ComplaintCategory)}
-                disabled={busy}
-                className="mt-1.5 w-full h-12 px-3.5 text-base sm:text-sm text-slate-900 bg-white border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600"
-              >
-                {COMPLAINT_CATEGORIES.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {t.categories[cat.value] ?? cat.value}
-                  </option>
-                ))}
-              </select>
+          {/* Visual Category Icon Grid for instant recognition */}
+          <div>
+            <p id="category-group-label" className="block text-sm font-medium text-slate-800">
+              {t.categoryLabel}
+            </p>
+            <div
+              role="radiogroup"
+              aria-labelledby="category-group-label"
+              className="mt-2 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5"
+            >
+              {COMPLAINT_CATEGORIES.map((cat) => {
+                const CatIcon = getCategoryIcon(cat.value);
+                const selected = form.category === cat.value;
+                return (
+                  <button
+                    key={cat.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={busy}
+                    onClick={() => onChange("category", cat.value as ComplaintCategory)}
+                    className={`p-3 rounded-xl border text-center flex flex-col items-center justify-center gap-1.5 min-h-[76px] transition-all disabled:opacity-50 ${
+                      selected
+                        ? "bg-blue-50/90 border-blue-600 text-blue-950 shadow-xs"
+                        : "bg-slate-50/60 border-slate-200/90 text-slate-700 hover:bg-slate-100/80 hover:border-slate-300"
+                    }`}
+                  >
+                    <CatIcon
+                      className={`w-5 h-5 shrink-0 ${
+                        selected ? "text-blue-700" : "text-slate-500"
+                      }`}
+                      aria-hidden="true"
+                    />
+                    <span className="text-xs font-medium leading-tight line-clamp-2">
+                      {t.categories[cat.value] ?? cat.value}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label
                 htmlFor="state-select"
@@ -788,19 +817,24 @@ export function ComplaintForm({
             >
               {modes.map((m) => {
                 const selected = form.mode === m.id;
+                const ModeIcon = getSubmissionModeIcon(m.id);
                 return (
                   <button
                     key={m.id}
                     type="button"
                     disabled={busy}
                     onClick={() => onChange("mode", m.id)}
-                    className={`px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-xl border text-start transition-colors min-h-[44px] ${
+                    className={`px-3.5 py-2.5 text-xs sm:text-sm font-medium rounded-xl border text-start inline-flex items-center gap-2 transition-colors min-h-[44px] ${
                       selected
                         ? "bg-slate-900 text-white border-slate-900 font-semibold"
                         : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-slate-950"
                     }`}
                   >
-                    {m.label}
+                    <ModeIcon
+                      className={`w-4 h-4 shrink-0 ${selected ? "text-blue-300" : "text-slate-500"}`}
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{m.label}</span>
                   </button>
                 );
               })}

@@ -203,7 +203,7 @@ export function DirectSubmitPermissionModal({
             />
           </div>
 
-          {/* Explicit Permission Checkbox */}
+          {/* Mandatory Explicit Permission Checkbox */}
           <label className="flex items-start gap-3 p-4 rounded-xl bg-blue-50/60 border border-blue-200/80 cursor-pointer">
             <input
               type="checkbox"

@@ -21,9 +21,15 @@ import { ClarifyChat } from "./components/ClarifyChat";
 import { ComplaintForm, type ComplaintFieldErrors } from "./components/ComplaintForm";
 import { ComplaintTrackerSection } from "./components/ComplaintTrackerSection";
 import { DraftReview } from "./components/DraftReview";
-import { LiveVoiceFlowModal } from "./components/LiveVoiceFlowModal";
+import {
+  buildGmailComposeUrl,
+  buildOfficialWhatsAppUrl,
+  LiveVoiceFlowModal,
+  type PendingLiveChannelConfirm,
+} from "./components/LiveVoiceFlowModal";
 import { PortalAssistantChat } from "./components/PortalAssistantChat";
 import { OfflineIndicator, PWAInstallButton } from "./components/PWAInstallButton";
+import { getCivicShowcaseStrings } from "./data/civicShowcaseTranslations";
 import { getDashboardExtrasStrings } from "./data/dashboardExtrasTranslations";
 import { INDIA_STATE_DISTRICTS } from "./data/indiaLocations";
 import { getInnovationStrings } from "./data/innovationTranslations";
@@ -86,8 +92,27 @@ import {
   persistSavedComplaints,
 } from "./utils/storage";
 
-const HERO_IMAGE_PATH = "/src/assets/images/hero_makkalvoice_1795284698438.jpg";
-const HERO_BANNER_PATH = "/src/assets/images/civic_voice_backdrop_1795320159387.jpg";
+const CONSTITUTION_BANNER_PATH =
+  "/src/assets/images/constitution_justice_banner_1795712869625.jpg";
+const LAW_ORDER_BANNER_PATH =
+  "/src/assets/images/law_order_civic_dome_1795712870964.jpg";
+const CITIZEN_VOICE_BANNER_PATH =
+  "/src/assets/images/citizen_voice_seva_1795712872881.jpg";
+const HERO_ANIMATED_BANNERS = [
+  CONSTITUTION_BANNER_PATH,
+  LAW_ORDER_BANNER_PATH,
+  CITIZEN_VOICE_BANNER_PATH,
+];
+
+function openExternalUrlSafely(url: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
 const INITIAL_FORM: ComplaintFormState = {
   mode: "complaint",
@@ -199,6 +224,9 @@ export default function App() {
   // Hands-Free Gemini Live Voice Flow Studio state
   const [liveVoiceOpen, setLiveVoiceOpen] = useState(false);
   const [liveActionToast, setLiveActionToast] = useState<string | null>(null);
+  const [pendingChannelConfirm, setPendingChannelConfirm] =
+    useState<PendingLiveChannelConfirm | null>(null);
+  const [activeHeroSlide, setActiveHeroSlide] = useState(0);
 
   // UI & Async state
   const [busy, setBusy] = useState(false);
@@ -206,8 +234,6 @@ export default function App() {
   const [autoFillNotice, setAutoFillNotice] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<ComplaintFieldErrors>({});
-  const [heroImgError, setHeroImgError] = useState(false);
-  const [bannerImgError, setBannerImgError] = useState(false);
 
   // Voice input & speech output state
   const [voiceTarget, setVoiceTarget] = useState<"complaint" | "answer" | null>(null);
@@ -221,6 +247,7 @@ export default function App() {
   const it = useMemo(() => getInnovationStrings(form.language), [form.language]);
   const dx = useMemo(() => getDashboardExtrasStrings(form.language), [form.language]);
   const vf = useMemo(() => getVoiceFlowStrings(form.language), [form.language]);
+  const cs = useMemo(() => getCivicShowcaseStrings(form.language), [form.language]);
   const speechOutputSupported = useMemo(() => isSpeechSynthesisSupported(), []);
 
   const voiceRecorder = useVoiceRecorder({
@@ -272,6 +299,15 @@ export default function App() {
   // and immediately wipe any legacy autosaved form data from previous visits.
   useEffect(() => {
     clearAutosavedForm();
+  }, []);
+
+  // Gentle automatic cross-fade for the unified constitutional/civic hero banner
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => {
+      setActiveHeroSlide((prev) => (prev + 1) % HERO_ANIMATED_BANNERS.length);
+    }, 5500);
+    return () => window.clearInterval(id);
   }, []);
 
   // Persist Complaint Tracker updates
@@ -1082,6 +1118,10 @@ export default function App() {
   attachmentsRef.current = attachments;
   const coSignersRef = useRef(coSigners);
   coSignersRef.current = coSigners;
+  const savedRecordsRef = useRef(savedRecords);
+  savedRecordsRef.current = savedRecords;
+  const pendingChannelConfirmRef = useRef(pendingChannelConfirm);
+  pendingChannelConfirmRef.current = pendingChannelConfirm;
 
   const showLiveToast = useCallback((message: string) => {
     setLiveActionToast(message);
@@ -1095,6 +1135,7 @@ export default function App() {
     handleStopSpeaking();
     setErrorMessage(null);
     setLiveActionToast(null);
+    setPendingChannelConfirm(null);
     setDashboardTab("write");
     setLiveVoiceOpen(true);
   }, [handleStopSpeaking, stopVoiceInput]);
@@ -1201,6 +1242,11 @@ export default function App() {
         portalName: resolvedGuidance.primary.name,
         portalUrl: resolvedGuidance.primary.url,
         portalHelpline: resolvedGuidance.primary.helpline ?? "",
+        officialEmail: resolvedGuidance.primary.officialEmail ?? "",
+        officialWhatsApp:
+          resolvedGuidance.primary.officialWhatsAppDisplay ??
+          resolvedGuidance.primary.officialWhatsApp ??
+          "",
         whyThisPortal: generated.whyThisPortal,
         draftPreview: generated.draft.slice(0, 700),
       };
@@ -1209,13 +1255,18 @@ export default function App() {
   );
 
   const handleLiveExecuteVoiceAction = useCallback(
-    async (action: string): Promise<LiveVoiceCommandResult> => {
+    async (
+      action: string,
+      spokenLanguage?: string,
+      args?: Record<string, unknown>,
+    ): Promise<LiveVoiceCommandResult> => {
       const subject = editableSubjectRef.current.trim();
       const draftText = editableDraftRef.current.trim();
       const latestForm = formRef.current;
       const guidance = portalGuidanceRef.current;
 
       if (action === "end_voice_flow") {
+        setPendingChannelConfirm(null);
         if (draftDataRef.current) {
           setDashboardTab("write");
           setStep("review");
@@ -1223,11 +1274,171 @@ export default function App() {
         return { success: true, closed: true };
       }
 
+      if (action === "switch_dashboard_tab") {
+        const rawTab = typeof args?.tab === "string" ? args.tab.trim().toLowerCase() : "write";
+        const nextTab =
+          rawTab === "saved" || rawTab === "portals" || rawTab === "write" ? rawTab : "write";
+        setDashboardTab(nextTab);
+        showLiveToast(`Switched dashboard to ${nextTab}.`);
+        return { success: true, activeTab: nextTab };
+      }
+
+      if (action === "check_saved_complaints") {
+        const recs = savedRecordsRef.current;
+        return {
+          success: true,
+          count: recs.length,
+          complaints: recs.slice(0, 5).map((r) => ({
+            subject: r.subject,
+            portalName: r.portalName,
+            status: r.status,
+            createdAt: r.createdAt,
+            trackingId: r.trackingId || "",
+          })),
+        };
+      }
+
+      if (action === "open_portal_assistant") {
+        setPortalChatOpen(true);
+        return { success: true, message: "Opened the step-by-step Portal Submission Assistant." };
+      }
+
+      if (action === "reset_form") {
+        handleResetForm();
+        setPendingChannelConfirm(null);
+        return { success: true, message: "Cleared the form for a fresh complaint." };
+      }
+
+      if (action === "add_cosigner") {
+        const cleanName = typeof args?.coSignerName === "string" ? args.coSignerName.trim() : "";
+        const cleanAddr =
+          typeof args?.coSignerAddress === "string" ? args.coSignerAddress.trim() : "";
+        if (!cleanName) {
+          return {
+            success: false,
+            error: "Please tell me the neighbor's name to add as a co-signer.",
+          };
+        }
+        setCoSigners((prev) => [
+          ...prev,
+          { id: `cs-${Date.now()}`, name: cleanName, address: cleanAddr },
+        ]);
+        showLiveToast(`Added co-signer: ${cleanName}`);
+        return { success: true, addedCoSigner: cleanName };
+      }
+
+      if (action === "regenerate_draft_language") {
+        const targetLang =
+          typeof args?.draftLanguage === "string" && args.draftLanguage.trim()
+            ? args.draftLanguage.trim()
+            : spokenLanguage || "English";
+        return handleLiveGenerateDraftCommand(targetLang, spokenLanguage || latestForm.language);
+      }
+
       if (!draftText) {
         return {
           success: false,
           error: "No official draft has been generated yet. Generate the draft first.",
         };
+      }
+
+      if (action === "prepare_gmail_compose") {
+        const spokenEmail =
+          typeof args?.recipientEmail === "string" ? args.recipientEmail.trim() : "";
+        const targetEmail =
+          spokenEmail ||
+          pendingChannelConfirmRef.current?.toEmail ||
+          guidance.primary.officialEmail ||
+          "";
+        const payload: PendingLiveChannelConfirm = {
+          channel: "gmail",
+          toEmail: targetEmail,
+          toWhatsApp: guidance.primary.officialWhatsApp ?? "",
+          toWhatsAppDisplay: guidance.primary.officialWhatsAppDisplay ?? "",
+          subject: subject || "Public Grievance Complaint",
+          body: draftText,
+        };
+        setPendingChannelConfirm(payload);
+        pendingChannelConfirmRef.current = payload;
+        return {
+          success: true,
+          awaitingPermission: true,
+          recipientEmail: targetEmail,
+          subject: payload.subject,
+          instruction: targetEmail
+            ? `Tell the citizen the official email (${targetEmail}) and subject are ready, and ask explicit permission to open Gmail with To, Subject, and Letter pre-filled so they can just tap Send.`
+            : "Tell the citizen the subject and letter are ready for Gmail, and invite them to say or type the recipient email ID and confirm to open Gmail.",
+        };
+      }
+
+      if (action === "open_gmail_compose") {
+        const spokenEmail =
+          typeof args?.recipientEmail === "string" ? args.recipientEmail.trim() : "";
+        const pending = pendingChannelConfirmRef.current;
+        const targetEmail = spokenEmail || pending?.toEmail || guidance.primary.officialEmail || "";
+        const mailSubject = pending?.subject || subject || "Public Grievance Complaint";
+        const mailBody = pending?.body || draftText;
+        const url = buildGmailComposeUrl(targetEmail, mailSubject, mailBody);
+        openExternalUrlSafely(url);
+        handleSaveToTracker();
+        showLiveToast(cs.toastGmailOpened);
+        return {
+          success: true,
+          openedGmail: true,
+          recipientEmail: targetEmail,
+          message:
+            "Opened Gmail with To, Subject, and the full complaint letter pre-filled. The citizen can verify the email ID and tap Send.",
+        };
+      }
+
+      if (action === "prepare_whatsapp_compose") {
+        const payload: PendingLiveChannelConfirm = {
+          channel: "whatsapp",
+          toEmail: guidance.primary.officialEmail ?? "",
+          toWhatsApp: guidance.primary.officialWhatsApp ?? "",
+          toWhatsAppDisplay: guidance.primary.officialWhatsAppDisplay ?? "",
+          subject: subject || "Public Grievance Complaint",
+          body: draftText,
+        };
+        setPendingChannelConfirm(payload);
+        pendingChannelConfirmRef.current = payload;
+        return {
+          success: true,
+          awaitingPermission: true,
+          officialWhatsApp: payload.toWhatsAppDisplay || payload.toWhatsApp,
+          instruction: payload.toWhatsApp
+            ? `Tell the citizen the verified official WhatsApp number (${payload.toWhatsAppDisplay || payload.toWhatsApp}) is ready with the full complaint message, and ask explicit permission to open WhatsApp.`
+            : "Ask explicit permission to open WhatsApp with the full complaint message pre-filled.",
+        };
+      }
+
+      if (action === "open_whatsapp_compose" || action === "share_whatsapp") {
+        const pending = pendingChannelConfirmRef.current;
+        const targetWa = pending?.toWhatsApp || guidance.primary.officialWhatsApp || "";
+        const waSubject = pending?.subject || subject || "Public Grievance Complaint";
+        const waBody = pending?.body || draftText;
+        if (targetWa) {
+          openExternalUrlSafely(buildOfficialWhatsAppUrl(targetWa, waSubject, waBody));
+          handleSaveToTracker();
+          showLiveToast(cs.toastWhatsAppOpened);
+          return {
+            success: true,
+            openedWhatsApp: true,
+            officialWhatsApp: guidance.primary.officialWhatsAppDisplay ?? targetWa,
+            message: "Opened Official WhatsApp with the complaint message ready to tap Send.",
+          };
+        }
+        await shareOfficialLetterPdf({
+          subject: waSubject,
+          draftText: waBody,
+          portalName: guidance.primary.name,
+          referenceNumber: latestForm.referenceNumber.trim() || undefined,
+          attachments: attachmentsRef.current,
+          coSigners: coSignersRef.current,
+          filename: "makkalvoice-complaint-paper.pdf",
+        });
+        showLiveToast(vf.toastSharedWhatsapp);
+        return { success: true, message: "Prepared WhatsApp share with the official letter." };
       }
 
       if (action === "read_draft") {
@@ -1253,6 +1464,28 @@ export default function App() {
         return { success: true, message: "Official A4 PDF has been downloaded." };
       }
 
+      if (action === "download_txt") {
+        const fullText = subject ? `Subject: ${subject}\n\n${draftText}` : draftText;
+        const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "makkalvoice-complaint-draft.txt";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showLiveToast("Downloaded plain text letter.");
+        return { success: true, message: "Plain text letter downloaded." };
+      }
+
+      if (action === "print_letter") {
+        setDashboardTab("write");
+        setStep("review");
+        window.setTimeout(() => window.print(), 300);
+        return { success: true, message: "Opened the A4 print dialog." };
+      }
+
       if (action === "copy_draft") {
         const fullText = subject ? `Subject: ${subject}\n\n${draftText}` : draftText;
         try {
@@ -1270,23 +1503,28 @@ export default function App() {
         return { success: true, message: "Saved to the citizen's Complaint Tracker." };
       }
 
-      if (action === "share_whatsapp") {
-        await shareOfficialLetterPdf({
-          subject,
-          draftText,
+      if (action === "open_official_portal") {
+        setDashboardTab("write");
+        setStep("review");
+        if (guidance.primary.url.startsWith("https://")) {
+          openExternalUrlSafely(guidance.primary.url);
+        }
+        return {
+          success: true,
           portalName: guidance.primary.name,
-          referenceNumber: latestForm.referenceNumber.trim() || undefined,
-          attachments: attachmentsRef.current,
-          coSigners: coSignersRef.current,
-          filename: "makkalvoice-complaint-paper.pdf",
-        });
-        showLiveToast(vf.toastSharedWhatsapp);
-        return { success: true, message: "Prepared WhatsApp share with the official letter." };
+          portalUrl: guidance.primary.url,
+          helpline: guidance.primary.helpline ?? "",
+          message: `Opened ${guidance.primary.name}.`,
+        };
       }
 
       return { success: false, error: `Unknown voice action: ${action}` };
     },
     [
+      cs.toastGmailOpened,
+      cs.toastWhatsAppOpened,
+      handleLiveGenerateDraftCommand,
+      handleResetForm,
       handleSaveToTracker,
       showLiveToast,
       vf.toastCopied,
@@ -1393,7 +1631,7 @@ export default function App() {
             </button>
           </nav>
 
-          {/* Zone 3: PWA Install Button (when installable) + Single compact language selector */}
+          {/* Zone 3: PWA Install + Compact Language Selector */}
           <div className="flex items-center gap-2 shrink-0">
             <PWAInstallButton it={it} />
             <label htmlFor="header-language-select" className="sr-only">
@@ -1405,7 +1643,7 @@ export default function App() {
               value={form.language}
               onChange={(e) => handleLanguageSelect(e.target.value)}
               disabled={busy}
-              className="h-10 max-w-[155px] sm:max-w-none ps-3 pe-7 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50 border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 whitespace-nowrap shrink-0"
+              className="h-10 max-w-[140px] sm:max-w-[180px] ps-2.5 pe-6 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50 border border-slate-300/90 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600/15 focus:border-blue-600 whitespace-nowrap shrink-0"
             >
               {LANGUAGES.map((lang) => (
                 <option key={lang.name} value={lang.name}>
@@ -1418,85 +1656,72 @@ export default function App() {
       </header>
 
       <main id="top" className="flex-1">
-        {/* Hero Section: Civic Concept Background Banner + Measured Contrast Scrim */}
-        <section className="no-print relative overflow-hidden bg-slate-50 border-b border-slate-200/80">
-          {!bannerImgError && (
-            <img
-              src={HERO_BANNER_PATH}
-              alt=""
-              aria-hidden="true"
-              referrerPolicy="no-referrer"
-              onError={() => setBannerImgError(true)}
-              className="pointer-events-none select-none absolute inset-0 w-full h-full object-cover object-center opacity-55 sm:opacity-65"
-            />
-          )}
+        {/* One Unified Animated Constitutional & Civic Hero Banner */}
+        <section className="no-print relative overflow-hidden bg-slate-950 border-b border-slate-200/80">
+          {/* Smoothly cross-fading full-bleed editorial civic photographs */}
+          <div aria-hidden="true" className="pointer-events-none select-none absolute inset-0">
+            {HERO_ANIMATED_BANNERS.map((src, idx) => {
+              const isActive = idx === activeHeroSlide;
+              return (
+                <img
+                  key={src}
+                  src={src}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className={`absolute inset-0 w-full h-full object-cover object-center transition-all duration-[1800ms] ease-out ${
+                    isActive ? "opacity-100 scale-105" : "opacity-0 scale-100"
+                  }`}
+                />
+              );
+            })}
+          </div>
 
+          {/* Crisp left-to-right scrim keeping text effortless to read while showcasing the banner */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/92 lg:bg-gradient-to-r lg:from-white/95 lg:via-white/82 lg:to-white/45"
+            className="pointer-events-none absolute inset-0 bg-gradient-to-r from-slate-950/90 via-slate-950/75 to-slate-950/35"
           />
 
-          <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-7 lg:gap-10 items-center">
-              <div className="lg:col-span-7 flex flex-col justify-center">
-                <p className="text-xs font-semibold text-blue-800">{t.heroKicker}</p>
+          <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 py-11 sm:py-16">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold tracking-wide text-blue-300">
+                {t.heroKicker}
+              </p>
 
-                <h1 className="mt-2 font-display text-[1.8rem] sm:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-slate-950 [text-wrap:balance] leading-[1.14]">
-                  {t.heroTitle}
-                </h1>
+              <h1 className="mt-2 font-display text-[1.95rem] sm:text-4xl lg:text-[2.65rem] font-bold tracking-tight text-white [text-wrap:balance] leading-[1.13]">
+                {t.heroTitle}
+              </h1>
 
-                <p className="mt-3 text-base text-slate-700 leading-relaxed max-w-xl">
-                  {t.heroSubtitle}
-                </p>
+              <p className="mt-3 text-base text-slate-200 leading-relaxed max-w-xl">
+                {t.heroSubtitle}
+              </p>
 
-                <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-slate-600">
-                  <span>{t.heroMeta1}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{t.heroMeta2}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{t.heroMeta3}</span>
-                </div>
-
-                <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                  <button
-                    type="button"
-                    onClick={handleHeroStartSpeaking}
-                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl shadow-sm transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
-                  >
-                    <AudioLines className="w-5 h-5" aria-hidden="true" />
-                    {vf.launchHeroBtn}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => navigateToDashboardTab("write", "workspace")}
-                    className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-3.5 py-2.5 text-sm font-medium text-slate-800 hover:text-slate-950 bg-white/75 sm:bg-transparent rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[44px]"
-                  >
-                    {t.heroCta}
-                    <ArrowDown className="w-4 h-4" aria-hidden="true" />
-                  </button>
-                </div>
+              <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs font-medium text-slate-300">
+                <span>{t.heroMeta1}</span>
+                <span aria-hidden="true">·</span>
+                <span>{t.heroMeta2}</span>
+                <span aria-hidden="true">·</span>
+                <span>{t.heroMeta3}</span>
               </div>
 
-              <div className="lg:col-span-5 flex">
-                <div className="w-full rounded-2xl overflow-hidden border border-white/80 ring-1 ring-slate-200/80 bg-white/90 shadow-[0_4px_18px_rgba(15,23,42,0.06)] flex items-center justify-center">
-                  {!heroImgError ? (
-                    <img
-                      src={HERO_IMAGE_PATH}
-                      alt="Indian citizens speaking into a smartphone to draft a structured public grievance letter"
-                      referrerPolicy="no-referrer"
-                      onError={() => setHeroImgError(true)}
-                      className="w-full h-52 sm:h-64 lg:h-72 object-cover"
-                    />
-                  ) : (
-                    <div className="p-8 text-center">
-                      <Mic className="w-10 h-10 text-blue-700 mx-auto" aria-hidden="true" />
-                      <p className="mt-3 text-sm font-medium text-slate-800">
-                        {t.heroTitle}
-                      </p>
-                    </div>
-                  )}
-                </div>
+              <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleHeroStartSpeaking}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 text-base font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-sm transition-all active:scale-[0.99] whitespace-nowrap shrink-0 min-h-[52px]"
+                >
+                  <AudioLines className="w-5 h-5" aria-hidden="true" />
+                  {vf.launchHeroBtn}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => navigateToDashboardTab("write", "workspace")}
+                  className="inline-flex items-center justify-center sm:justify-start gap-1.5 px-4 py-3 text-sm font-medium text-white hover:bg-white/20 bg-white/10 border border-white/25 rounded-xl transition-colors whitespace-nowrap shrink-0 min-h-[48px]"
+                >
+                  {t.heroCta}
+                  <ArrowDown className="w-4 h-4" aria-hidden="true" />
+                </button>
               </div>
             </div>
           </div>
@@ -1944,8 +2169,65 @@ export default function App() {
           )}
         </section>
 
+        {/* Subtle Constitutional Rights & Civic Governance Visual Banner Strip */}
+        <section className="no-print max-w-5xl mx-auto px-4 sm:px-6 pb-8">
+          <div className="mb-3.5">
+            <h2 className="font-display text-base sm:text-lg font-bold tracking-tight text-slate-950">
+              {cs.stripHeading}
+            </h2>
+            <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{cs.stripSub}</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              {
+                src: CONSTITUTION_BANNER_PATH,
+                title: cs.slide1Title,
+                caption: cs.slide1Caption,
+                tab: "write" as const,
+              },
+              {
+                src: LAW_ORDER_BANNER_PATH,
+                title: cs.slide2Title,
+                caption: cs.slide2Caption,
+                tab: "portals" as const,
+              },
+              {
+                src: CITIZEN_VOICE_BANNER_PATH,
+                title: cs.slide3Title,
+                caption: cs.slide3Caption,
+                tab: "saved" as const,
+              },
+            ].map((card) => (
+              <button
+                key={card.src}
+                type="button"
+                onClick={() => navigateToDashboardTab(card.tab, "workspace")}
+                className="group text-start rounded-2xl overflow-hidden bg-white border border-slate-200/90 hover:border-blue-300 shadow-[0_1px_3px_rgba(15,23,42,0.05)] hover:shadow-md transition-all"
+              >
+                <div className="aspect-[16/9] bg-slate-100 overflow-hidden">
+                  <img
+                    src={card.src}
+                    alt={card.title}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
+                  />
+                </div>
+                <div className="p-3.5">
+                  <h3 className="font-display text-sm font-semibold text-slate-950 group-hover:text-blue-700 transition-colors">
+                    {card.title}
+                  </h3>
+                  <p className="mt-1 text-xs text-slate-600 leading-relaxed line-clamp-2">
+                    {card.caption}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* Quiet Privacy & Trust Strip */}
-        <section id="privacy" className="no-print border-t border-slate-200/80 bg-white py-10">
+        <section id="privacy" className="no-print border-t border-slate-200/80 bg-white py-9">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <div className="flex items-start gap-3">
               <Shield className="w-5 h-5 text-slate-700 mt-0.5 shrink-0" aria-hidden="true" />
@@ -2016,13 +2298,36 @@ export default function App() {
       <div className="no-print">
         <LiveVoiceFlowModal
           open={liveVoiceOpen}
-          onClose={() => setLiveVoiceOpen(false)}
+          onClose={() => {
+            setLiveVoiceOpen(false);
+            setPendingChannelConfirm(null);
+          }}
           t={t}
           dashboardLanguage={form.language}
           form={form}
           draftData={draftData}
           portalName={portalGuidance.primary.name}
+          portalUrl={portalGuidance.primary.url}
+          officialEmail={portalGuidance.primary.officialEmail}
+          officialWhatsApp={portalGuidance.primary.officialWhatsApp}
+          officialWhatsAppDisplay={portalGuidance.primary.officialWhatsAppDisplay}
           actionToast={liveActionToast}
+          pendingChannelConfirm={pendingChannelConfirm}
+          onUpdatePendingEmail={(nextEmail) => {
+            setPendingChannelConfirm((prev) => {
+              const updated = prev ? { ...prev, toEmail: nextEmail } : prev;
+              pendingChannelConfirmRef.current = updated;
+              return updated;
+            });
+          }}
+          onCancelPendingChannel={() => {
+            setPendingChannelConfirm(null);
+            pendingChannelConfirmRef.current = null;
+          }}
+          onConfirmOpenChannel={(channel) => {
+            handleSaveToTracker();
+            showLiveToast(channel === "gmail" ? cs.toastGmailOpened : cs.toastWhatsAppOpened);
+          }}
           onIntakeUpdate={handleLiveIntakeUpdate}
           onGenerateDraftCommand={handleLiveGenerateDraftCommand}
           onExecuteVoiceAction={handleLiveExecuteVoiceAction}

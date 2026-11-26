@@ -2,21 +2,28 @@ import { useEffect, useRef } from "react";
 import {
   AlertTriangle,
   AudioLines,
+  BookmarkPlus,
   CheckCircle2,
   Circle,
+  ExternalLink,
   FileCheck2,
+  FileDown,
   FileText,
   Globe,
   Loader2,
+  Mail,
   MapPin,
+  MessageCircle,
   Mic,
   MicOff,
   PhoneOff,
+  Printer,
   RefreshCw,
   User,
   Volume2,
   X,
 } from "lucide-react";
+import { getCivicShowcaseStrings } from "../data/civicShowcaseTranslations";
 import { LANGUAGES } from "../data/languages";
 import { getLocalizedDistrictName, getLocalizedStateName } from "../data/localizedLocations";
 import type { UiStrings } from "../data/translations";
@@ -32,6 +39,15 @@ import type { ComplaintFormState, DraftResponse } from "../types";
 import { resolveEffectiveDistrict } from "../utils/api";
 import { getCategoryIcon } from "../utils/civicIcons";
 
+export interface PendingLiveChannelConfirm {
+  channel: "gmail" | "whatsapp";
+  toEmail: string;
+  toWhatsApp: string;
+  toWhatsAppDisplay: string;
+  subject: string;
+  body: string;
+}
+
 interface LiveVoiceFlowModalProps {
   open: boolean;
   onClose: () => void;
@@ -40,7 +56,15 @@ interface LiveVoiceFlowModalProps {
   form: ComplaintFormState;
   draftData: DraftResponse | null;
   portalName: string;
+  portalUrl?: string;
+  officialEmail?: string;
+  officialWhatsApp?: string;
+  officialWhatsAppDisplay?: string;
   actionToast: string | null;
+  pendingChannelConfirm: PendingLiveChannelConfirm | null;
+  onUpdatePendingEmail: (nextEmail: string) => void;
+  onCancelPendingChannel: () => void;
+  onConfirmOpenChannel: (channel: "gmail" | "whatsapp") => void;
   onIntakeUpdate: (patch: LiveIntakePatch) => void;
   onGenerateDraftCommand: (
     draftLanguage: string,
@@ -49,6 +73,7 @@ interface LiveVoiceFlowModalProps {
   onExecuteVoiceAction: (
     action: string,
     spokenLanguage: string,
+    args?: Record<string, unknown>,
   ) => Promise<LiveVoiceCommandResult>;
   onOpenDraftScreen: () => void;
 }
@@ -59,6 +84,18 @@ function formatTimer(seconds: number): string {
   return `${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+export function buildGmailComposeUrl(to: string, subject: string, body: string): string {
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to.trim())}&su=${encodeURIComponent(subject.trim() || "Public Grievance Complaint")}&body=${encodeURIComponent(body.trim().slice(0, 3500))}`;
+}
+
+export function buildOfficialWhatsAppUrl(phone: string, subject: string, body: string): string {
+  const digits = phone.replace(/\D/g, "");
+  const message = `${subject.trim() || "Public Grievance Complaint"}\n\n${body.trim()}`.slice(0, 3500);
+  return digits
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
 export function LiveVoiceFlowModal({
   open,
   onClose,
@@ -67,13 +104,22 @@ export function LiveVoiceFlowModal({
   form,
   draftData,
   portalName,
+  portalUrl,
+  officialEmail,
+  officialWhatsApp,
+  officialWhatsAppDisplay,
   actionToast,
+  pendingChannelConfirm,
+  onUpdatePendingEmail,
+  onCancelPendingChannel,
+  onConfirmOpenChannel,
   onIntakeUpdate,
   onGenerateDraftCommand,
   onExecuteVoiceAction,
   onOpenDraftScreen,
 }: LiveVoiceFlowModalProps) {
   const vf = getVoiceFlowStrings(dashboardLanguage);
+  const cs = getCivicShowcaseStrings(dashboardLanguage);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
   const live = useLiveVoiceFlow({
@@ -123,6 +169,7 @@ export function LiveVoiceFlowModal({
   const hasLocation = Boolean(form.state || effectiveDistrict || form.town.trim());
   const hasContact = form.name.trim().length >= 2 && form.contact.replace(/\D/g, "").length >= 10;
   const hasDraft = Boolean(draftData);
+  const spokenLang = live.detectedSpokenLanguage ?? dashboardLanguage;
 
   const statusText: Record<LiveVoiceStatus, string> = {
     idle: vf.statusConnecting,
@@ -159,16 +206,34 @@ export function LiveVoiceFlowModal({
         ? Math.max(14, live.micLevel)
         : 10;
 
+  const gmailHref =
+    pendingChannelConfirm?.channel === "gmail"
+      ? buildGmailComposeUrl(
+          pendingChannelConfirm.toEmail,
+          pendingChannelConfirm.subject,
+          pendingChannelConfirm.body,
+        )
+      : "";
+
+  const waHref =
+    pendingChannelConfirm?.channel === "whatsapp"
+      ? buildOfficialWhatsAppUrl(
+          pendingChannelConfirm.toWhatsApp,
+          pendingChannelConfirm.subject,
+          pendingChannelConfirm.body,
+        )
+      : "";
+
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-labelledby="live-voice-studio-title"
-      className="fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto"
+      className="fixed inset-0 z-50 bg-slate-950/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto"
     >
-      <div className="w-full max-w-4xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden my-auto">
+      <div className="w-full max-w-5xl bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden my-auto">
         {/* Top Studio Bar */}
-        <div className="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-4">
+        <div className="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h2
               id="live-voice-studio-title"
@@ -194,7 +259,7 @@ export function LiveVoiceFlowModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             <span className="font-mono text-xs font-semibold tabular-nums text-slate-600">
               {formatTimer(live.elapsedSeconds)}
             </span>
@@ -211,8 +276,8 @@ export function LiveVoiceFlowModal({
 
         {/* Main 2-Column Live Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-12 divide-y lg:divide-y-0 lg:divide-x divide-slate-200">
-          {/* Left Column: Live Continuous Audio Presence + Real-Time Conversation */}
-          <div className="lg:col-span-7 p-5 sm:p-6 flex flex-col justify-between gap-5">
+          {/* Left Column: Live Continuous Audio Presence + Permission Card + Real-Time Conversation */}
+          <div className="lg:col-span-7 p-5 sm:p-6 flex flex-col justify-between gap-4">
             {/* Live Voice Presence Panel */}
             <div className="p-5 rounded-xl bg-slate-950 text-white">
               <div className="flex items-center justify-between gap-3">
@@ -234,15 +299,9 @@ export function LiveVoiceFlowModal({
                 </div>
 
                 {/* Live 7-Bar Waveform Meter */}
-                <div
-                  aria-hidden="true"
-                  className="flex items-center gap-1 h-8 shrink-0"
-                >
+                <div aria-hidden="true" className="flex items-center gap-1 h-8 shrink-0">
                   {barMultipliers.map((mult, idx) => {
-                    const heightPct =
-                      live.status === "speaking"
-                        ? Math.max(22, Math.min(100, Math.round(activeEnergy * mult)))
-                        : Math.max(14, Math.min(100, Math.round(activeEnergy * mult)));
+                    const heightPct = Math.max(14, Math.min(100, Math.round(activeEnergy * mult)));
                     return (
                       <span
                         key={idx}
@@ -270,9 +329,132 @@ export function LiveVoiceFlowModal({
                 <span className="font-semibold text-slate-200 me-1.5">
                   {vf.voiceCommandsLabel}:
                 </span>
-                <span>{vf.voiceCommandsList}</span>
+                <span>{vf.voiceCommandsList} · “Open Gmail” · “Open WhatsApp” · “Print”</span>
               </div>
             </div>
+
+            {/* Permission Card for Pre-Filled Gmail / Official WhatsApp */}
+            {pendingChannelConfirm && (
+              <div
+                role="region"
+                aria-label={
+                  pendingChannelConfirm.channel === "gmail"
+                    ? cs.liveGmailConfirmTitle
+                    : cs.liveWhatsAppConfirmTitle
+                }
+                className={`p-4 rounded-xl border space-y-3 ${
+                  pendingChannelConfirm.channel === "gmail"
+                    ? "bg-blue-50/80 border-blue-200"
+                    : "bg-emerald-50/80 border-emerald-200"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-950 flex items-center gap-1.5">
+                      {pendingChannelConfirm.channel === "gmail" ? (
+                        <Mail className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
+                      ) : (
+                        <MessageCircle className="w-4 h-4 text-emerald-700 shrink-0" aria-hidden="true" />
+                      )}
+                      {pendingChannelConfirm.channel === "gmail"
+                        ? cs.liveGmailConfirmTitle
+                        : cs.liveWhatsAppConfirmTitle}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-700">
+                      {pendingChannelConfirm.channel === "gmail"
+                        ? cs.liveGmailConfirmDesc
+                        : cs.liveWhatsAppConfirmDesc}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onCancelPendingChannel}
+                    aria-label={cs.cancelBtn}
+                    className="p-1 text-slate-500 hover:text-slate-900 rounded-lg"
+                  >
+                    <X className="w-4 h-4" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {pendingChannelConfirm.channel === "gmail" ? (
+                  <div className="space-y-2">
+                    <div>
+                      <label
+                        htmlFor="live-voice-gmail-to"
+                        className="block text-[11px] font-semibold text-slate-700"
+                      >
+                        {cs.recipientEmailLabel}
+                      </label>
+                      <input
+                        id="live-voice-gmail-to"
+                        type="email"
+                        value={pendingChannelConfirm.toEmail}
+                        onChange={(e) => onUpdatePendingEmail(e.target.value)}
+                        placeholder="department@gov.in"
+                        className="mt-1 w-full h-10 px-3 text-xs sm:text-sm font-mono font-semibold text-slate-950 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                      />
+                    </div>
+                    <p className="text-xs text-slate-800 truncate">
+                      <strong className="font-semibold">{t.subjectLabel}:</strong>{" "}
+                      {pendingChannelConfirm.subject}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href={gmailHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => onConfirmOpenChannel("gmail")}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors"
+                      >
+                        <Mail className="w-3.5 h-3.5" aria-hidden="true" />
+                        {cs.openGmailPrefilledBtn}
+                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={onCancelPendingChannel}
+                        className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        {cs.cancelBtn}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {pendingChannelConfirm.toWhatsApp && (
+                      <p className="text-xs font-mono font-semibold text-emerald-950">
+                        {cs.recipientWhatsAppLabel}:{" "}
+                        {pendingChannelConfirm.toWhatsAppDisplay || pendingChannelConfirm.toWhatsApp}
+                      </p>
+                    )}
+                    <p className="text-xs text-slate-800 truncate">
+                      <strong className="font-semibold">{t.subjectLabel}:</strong>{" "}
+                      {pendingChannelConfirm.subject}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <a
+                        href={waHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => onConfirmOpenChannel("whatsapp")}
+                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg transition-colors"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" aria-hidden="true" />
+                        {cs.openWhatsAppPrefilledBtn}
+                        <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={onCancelPendingChannel}
+                        className="px-3 py-2 text-xs font-medium text-slate-600 hover:text-slate-900"
+                      >
+                        {cs.cancelBtn}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {actionToast && (
               <div
@@ -302,10 +484,8 @@ export function LiveVoiceFlowModal({
             )}
 
             {/* Live Transcript Window */}
-            <div className="flex-1 flex flex-col min-h-[210px] max-h-[290px]">
-              <p className="text-xs font-semibold text-slate-500 mb-2">
-                {vf.transcriptHeading}
-              </p>
+            <div className="flex-1 flex flex-col min-h-[205px] max-h-[285px]">
+              <p className="text-xs font-semibold text-slate-500 mb-2">{vf.transcriptHeading}</p>
               <div className="flex-1 overflow-y-auto space-y-2.5 pe-1">
                 {live.transcripts.length === 0 ? (
                   <div className="h-full min-h-[160px] flex items-center justify-center text-center px-4 rounded-xl bg-slate-50 border border-slate-200/80">
@@ -341,19 +521,17 @@ export function LiveVoiceFlowModal({
             </div>
           </div>
 
-          {/* Right Column: Live Auto-Filled Progress (Hands-Free Form Watch) */}
-          <div className="lg:col-span-5 p-5 sm:p-6 bg-slate-50/60 flex flex-col justify-between gap-5">
+          {/* Right Column: Live Auto-Filled Progress + Full Voice/Tap Actions */}
+          <div className="lg:col-span-5 p-5 sm:p-6 bg-slate-50/60 flex flex-col justify-between gap-4">
             <div>
-              <h3 className="text-xs font-semibold text-slate-700">
-                {vf.progressHeading}
-              </h3>
+              <h3 className="text-xs font-semibold text-slate-700">{vf.progressHeading}</h3>
 
-              <div className="mt-3.5 space-y-3">
+              <div className="mt-3 space-y-2.5">
                 {/* 1. Problem & Category */}
                 {(() => {
                   const ProblemCatIcon = getCategoryIcon(form.category);
                   return (
-                    <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
+                    <div className="p-3 rounded-xl bg-white border border-slate-200/90">
                       <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
                         <span className="inline-flex items-center gap-2">
                           <ProblemCatIcon className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
@@ -366,11 +544,11 @@ export function LiveVoiceFlowModal({
                         )}
                       </div>
                       {hasProblem ? (
-                        <div className="mt-1.5 ps-6 space-y-1">
+                        <div className="mt-1 ps-6 space-y-0.5">
                           <p className="text-[11px] font-medium text-blue-800">
                             {t.categories[form.category] ?? form.category}
                           </p>
-                          <p className="text-xs text-slate-700 line-clamp-3 leading-relaxed">
+                          <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
                             {form.complaint}
                           </p>
                         </div>
@@ -382,7 +560,7 @@ export function LiveVoiceFlowModal({
                 })()}
 
                 {/* 2. Location */}
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
+                <div className="p-3 rounded-xl bg-white border border-slate-200/90">
                   <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
                     <span className="inline-flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
@@ -404,7 +582,7 @@ export function LiveVoiceFlowModal({
                 </div>
 
                 {/* 3. Citizen Name & Phone */}
-                <div className="p-3.5 rounded-xl bg-white border border-slate-200/90">
+                <div className="p-3 rounded-xl bg-white border border-slate-200/90">
                   <div className="flex items-center justify-between gap-2 text-xs font-semibold text-slate-800">
                     <span className="inline-flex items-center gap-2">
                       <User className="w-4 h-4 text-blue-700 shrink-0" aria-hidden="true" />
@@ -425,9 +603,9 @@ export function LiveVoiceFlowModal({
                   )}
                 </div>
 
-                {/* 4. Generated Draft & Official Portal */}
+                {/* 4. Generated Draft, Official Portal & Channels */}
                 <div
-                  className={`p-3.5 rounded-xl border ${
+                  className={`p-3 rounded-xl border ${
                     hasDraft
                       ? "bg-emerald-50/70 border-emerald-200/90"
                       : "bg-white border-slate-200/90"
@@ -448,28 +626,114 @@ export function LiveVoiceFlowModal({
                     )}
                   </div>
                   {hasDraft && draftData ? (
-                    <div className="mt-1.5 ps-6 space-y-1">
+                    <div className="mt-1 ps-6 space-y-1">
                       <p className="text-xs font-semibold text-emerald-900">
                         {vf.draftReadyLabel} — {portalName}
                       </p>
-                      <p className="text-xs text-slate-700 line-clamp-2">
-                        {draftData.subject}
-                      </p>
+                      {officialEmail && (
+                        <p className="text-[11px] font-mono text-blue-800 break-all">
+                          <Mail className="w-3 h-3 inline me-1" aria-hidden="true" />
+                          {officialEmail}
+                        </p>
+                      )}
+                      {officialWhatsApp && (
+                        <p className="text-[11px] font-mono text-emerald-800">
+                          <MessageCircle className="w-3 h-3 inline me-1" aria-hidden="true" />
+                          {officialWhatsAppDisplay || officialWhatsApp}
+                        </p>
+                      )}
+                      <p className="text-xs text-slate-700 line-clamp-2">{draftData.subject}</p>
                     </div>
                   ) : (
                     <p className="mt-1 ps-6 text-xs text-slate-400">{vf.waitingToHear}</p>
                   )}
                 </div>
+
+                {/* All Dashboard Actions Available by Voice or Quick Tap */}
+                {hasDraft && (
+                  <div className="p-3 rounded-xl bg-white border border-slate-200/90 space-y-2">
+                    <p className="text-[11px] font-semibold text-slate-600">{cs.liveActionsTitle}</p>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void onExecuteVoiceAction("prepare_gmail_compose", spokenLang)}
+                        className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <Mail className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{cs.actionGmail}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void onExecuteVoiceAction("prepare_whatsapp_compose", spokenLang)
+                        }
+                        className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-emerald-900 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{cs.actionWhatsApp}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void onExecuteVoiceAction("download_pdf", spokenLang)}
+                        className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <FileDown className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{cs.actionPdf}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void onExecuteVoiceAction("save_tracker", spokenLang)}
+                        className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <BookmarkPlus className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{cs.actionTracker}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => void onExecuteVoiceAction("print_letter", spokenLang)}
+                        className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <Printer className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{cs.actionPrint}</span>
+                      </button>
+
+                      {portalUrl ? (
+                        <a
+                          href={portalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{cs.actionPortal}</span>
+                        </a>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleFinishToDraft}
+                          className="inline-flex items-center justify-center gap-1 px-2 py-2 text-[11px] font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors whitespace-nowrap"
+                        >
+                          <FileText className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                          <span className="truncate">{cs.actionPortal}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Quiet Safety Controls (optional — not required during normal hands-free voice flow) */}
-            <div className="pt-4 border-t border-slate-200/80 space-y-2.5">
+            {/* Quiet Safety Controls */}
+            <div className="pt-3 border-t border-slate-200/80 space-y-2">
               {hasDraft && (
                 <button
                   type="button"
                   onClick={handleFinishToDraft}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold text-white bg-blue-700 hover:bg-blue-800 rounded-xl transition-colors min-h-[44px]"
+                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-xl transition-colors min-h-[44px]"
                 >
                   <FileText className="w-4 h-4 shrink-0" aria-hidden="true" />
                   {vf.viewDraftBtn}

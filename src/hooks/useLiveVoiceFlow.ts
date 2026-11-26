@@ -52,6 +52,7 @@ interface UseLiveVoiceFlowOptions {
   onExecuteVoiceAction: (
     action: string,
     spokenLanguage: string,
+    args?: Record<string, unknown>,
   ) => Promise<LiveVoiceCommandResult>;
   onSessionClosedByVoice?: () => void;
 }
@@ -479,6 +480,7 @@ export function useLiveVoiceFlow({
                 result = await onExecuteActionRef.current(
                   action,
                   detectedLangRef.current || hintLanguage,
+                  args,
                 );
               } catch (err) {
                 result = {

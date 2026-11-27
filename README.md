@@ -1,25 +1,37 @@
-# MakkalVoice — Voice-First Public Grievance & Civic Drafting Platform for Bharat
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./light.svg" />
+    <img
+      src="./dark.svg"
+      alt="Hariharan M — Software Builder & Voice-First AI Profile Banner for MakkalVoice"
+      width="100%"
+    />
+  </picture>
+</div>
 
-**Theme:** Public Infrastructure and Civic Services (**Scaler × Wispr Flow — Build for Bharat**)
+<br />
 
-MakkalVoice enables everyday Indian citizens across **13 languages** (Tamil, Hindi, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, Punjabi, Odia, Assamese, Urdu, and English) to simply **speak** their civic, utility, consumer, RTI, or escalation problem naturally—and automatically converts it into an official, ready-to-submit complaint letter matched to verified government portals.
+# MakkalVoice — Voice-First Civic Action for Bharat
+
+Built by **Hariharan M** (**Hariharan's Team**) for **Scaler × Wispr Flow — Build for Bharat** (*Theme: Public Infrastructure and Civic Services*).
+
+**MakkalVoice** turns natural spoken civic, utility, consumer, RTI, or escalation issues across **13 Indian languages** into formal, submission-ready official letters matched to verified Indian government portals — without typing or complex forms.
 
 ---
 
-## End-to-End Voice-First Core Flow
+## Core Focus
 
-1. **Hands-Free Live Voice Flow:** Speak naturally in any Indian language or mix (e.g., Tamil/Tanglish, Hindi/Hinglish). MakkalVoice replies in a warm, respectful regional voice, asks short clarifying questions, and auto-fills category, area/location, and details on the dashboard without typing.
-2. **Formal Official Drafting (Complaint, RTI Act 2005, or Escalation):** Generates a structured letter keeping citizen personal details private on-device until final preview.
-3. **Verified Government Portal Matching:** Automatically matches verified Indian Central, State, and Municipal grievance portals (CPGRAMS, NCH, RailMadad, RBI CMS, CyberCrime, State CM Grievance Cells, Municipal portals).
-4. **Permission-First Dispatch & Citizen Tracker:**
-   - Prepares pre-filled **Gmail** (To, Subject, Body) and **Official WhatsApp** drafts only after explicit user confirmation.
-   - Exports formal **A4 PDF / TXT** and saves complaints locally in **My Saved Complaints** for tracking and escalation.
+- **Hands-Free Live Voice Flow:** Continuous real-time audio conversation across 13 Indian languages (`Tamil`, `Hindi`, `Telugu`, `Kannada`, `Malayalam`, `Bengali`, `Marathi`, `Gujarati`, `Punjabi`, `Odia`, `Assamese`, `Urdu`, and `English`), adapting automatically to what the citizen speaks with culturally respectful regional voice phrasing.
+- **Voice-to-Dashboard Sync:** Automatically populates complaint summary, category, state/district/area, and clarifying facts as the citizen speaks.
+- **Formal Drafting & Verified Portal Routing:** Generates Complaint, RTI Act 2005, and Escalation notices while matching verified national, state, and municipal portals (`CPGRAMS`, `NCH`, `RailMadad`, `RBI CMS`, `CyberCrime`, and State/City portals).
+- **Privacy & Permission-First Dispatch:** Keeps citizen name, phone number, and saved complaint history on-device; opens pre-filled **Gmail** or **Official WhatsApp** compose windows strictly after explicit user confirmation, alongside A4 PDF/TXT export and local complaint tracking.
 
 ---
 
 ## Quick Start (Starts Without Any Secret Keys)
 
-No secret API keys are required to clone, boot, and test the end-to-end MakkalVoice flow locally:
+Clone the repository and start the app locally with **zero API keys required**:
 
 ```bash
 npm install
@@ -28,10 +40,11 @@ npm run dev
 
 Open **http://localhost:3000** in your browser.
 
-### Optional: Full Live Gemini AI Mode
-By default, if `GEMINI_API_KEY` is not configured in `.env`, MakkalVoice automatically runs with its built-in **Local Demo Fallback** (browser speech recognition/synthesis + deterministic Indian civic extraction & portal routing) so the full flow works immediately with zero secrets.
+> **No-Key Local Demo Mode:** When `GEMINI_API_KEY` is not set in `.env`, MakkalVoice automatically enables its built-in **Local Demo Fallback** (`serverDemoFallback.ts`), using browser speech recognition/synthesis and deterministic Indian civic routing so the full end-to-end flow runs immediately with zero secret keys.
 
-To enable full **Gemini Live API** real-time regional audio conversation, multimodal photo/bill scanning, and AI translation locally:
+### Optional: Full Live Gemini AI Mode
+
+To run with live **Gemini Live Audio**, multimodal photo/bill scanning, and AI regional drafting locally:
 
 1. Copy `.env.example` to `.env`
 2. Add your `GEMINI_API_KEY`
@@ -39,9 +52,18 @@ To enable full **Gemini Live API** real-time regional audio conversation, multim
 
 ---
 
-## Tech Stack
+## Engineering Stack
 
-- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Lucide Icons, jsPDF
-- **Backend:** Express + WebSocket (`server.ts`, `serverLiveVoice.ts`)
-- **AI & Voice:** Google `@google/genai` (Gemini Live Audio, Multimodal Transcription & Drafting, Neural TTS) with clean no-key local fallback (`serverDemoFallback.ts`)
-- **Privacy:** Citizen name, phone number, and saved complaint history stay on the user's device; Gmail/WhatsApp actions require explicit user permission.
+| Layer | Technologies |
+| --- | --- |
+| **Frontend** | TypeScript, React 19, Vite, Tailwind CSS, Lucide Icons, jsPDF |
+| **Backend & Real-Time** | Node.js, Express, WebSockets (`ws`) |
+| **AI & Voice** | Google `@google/genai` (Gemini Live API, Multimodal Audio/Image, Neural TTS) + Local Fallback |
+| **Client Persistence** | Browser `localStorage` for saved complaints, offline queue & on-device privacy |
+
+---
+
+## Connect
+
+- **Live Prototype:** [MakkalVoice on Cloud Run](https://ais-pre-ku3grlpqjfttslpwioqmwf-129114898352.asia-east1.run.app)
+- **Email:** hariharan.m.s.287@gmail.com

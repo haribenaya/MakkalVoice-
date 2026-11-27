@@ -14,7 +14,7 @@
 
 # MakkalVoice — Voice-First Civic Action for Bharat
 
-Built by **Hariharan M**, **Bhashini**, and **Hariharan** (**Hariharan's Team**) for **Scaler × Wispr Flow — Build for Bharat** (*Theme: Public Infrastructure and Civic Services*).
+Built by **Hariharan M**, **Bhashini S**, and **Hariharan S** (**Hariharan's Team**) for **Scaler × Wispr Flow — Build for Bharat** (*Theme: Public Infrastructure and Civic Services*).
 
 **MakkalVoice** turns natural spoken civic, utility, consumer, RTI, or escalation issues across **13 Indian languages** into formal, submission-ready official letters matched to verified Indian government portals — without typing or complex forms.
 
@@ -71,5 +71,5 @@ To run with live **Gemini Live Audio**, multimodal photo/bill scanning, and AI r
 
 ## Team & Connect
 
-- **Team:** Hariharan M, Bhashini & Hariharan (*Hariharan's Team*)
+- **Team:** Hariharan M, Bhashini S & Hariharan S (*Hariharan's Team*)
 - **Email:** haribenaya32@gmail.com

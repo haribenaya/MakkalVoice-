@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LANGUAGE_LOCALE_MAP } from "../data/languages";
 import { resolveLocalizedErrorMessage } from "../data/localizedErrors";
 import type { ComplaintCategory, SubmissionMode } from "../types";
+import {
+  getSpeechRecognitionConstructor,
+  speakText,
+  stopSpeakingText,
+  type SpeechRecognitionLike,
+} from "../utils/speech";
 
 export type LiveVoiceStatus =
   | "idle"
@@ -147,6 +154,8 @@ export function useLiveVoiceFlow({
   const detectedLangRef = useRef<string>(hintLanguage);
   const timerRef = useRef<number | null>(null);
   const isClosingRef = useRef<boolean>(false);
+  const demoModeRef = useRef<boolean>(false);
+  const demoRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const onIntakeUpdateRef = useRef(onIntakeUpdate);
   const onGenerateDraftRef = useRef(onGenerateDraftCommand);
@@ -315,6 +324,19 @@ export function useLiveVoiceFlow({
     setAiSpeaking(false);
     setMicPaused(false);
     micPausedRef.current = false;
+    demoModeRef.current = false;
+    if (demoRecognitionRef.current) {
+      try {
+        demoRecognitionRef.current.onresult = null;
+        demoRecognitionRef.current.onerror = null;
+        demoRecognitionRef.current.onend = null;
+        demoRecognitionRef.current.abort();
+      } catch {
+        // Ignore
+      }
+      demoRecognitionRef.current = null;
+    }
+    stopSpeakingText();
   }, [stopAllPlayback]);
 
   const stopSession = useCallback(() => {
@@ -417,6 +439,7 @@ export function useLiveVoiceFlow({
         try {
           const msg = JSON.parse(String(event.data)) as {
             type?: string;
+            demoMode?: boolean;
             data?: unknown;
             text?: string;
             callId?: string;
@@ -427,7 +450,44 @@ export function useLiveVoiceFlow({
           };
 
           if (msg.type === "ready") {
+            demoModeRef.current = Boolean(msg.demoMode);
             setStatus(micPausedRef.current ? "paused" : "listening");
+            if (demoModeRef.current) {
+              const Ctor = getSpeechRecognitionConstructor();
+              if (Ctor) {
+                try {
+                  const rec = new Ctor();
+                  rec.lang = LANGUAGE_LOCALE_MAP[hintLanguage] ?? "en-IN";
+                  rec.continuous = true;
+                  rec.interimResults = false;
+                  rec.onresult = (ev) => {
+                    if (isClosingRef.current || micPausedRef.current) return;
+                    for (let i = ev.resultIndex; i < ev.results.length; i += 1) {
+                      if (ev.results[i].isFinal) {
+                        const spoken = ev.results[i][0]?.transcript?.trim();
+                        if (spoken && wsRef.current?.readyState === WebSocket.OPEN) {
+                          wsRef.current.send(JSON.stringify({ type: "text", text: spoken }));
+                        }
+                      }
+                    }
+                  };
+                  rec.onerror = () => {};
+                  rec.onend = () => {
+                    if (!isClosingRef.current && demoModeRef.current && !micPausedRef.current) {
+                      try {
+                        rec.start();
+                      } catch {
+                        // Ignore restart timing errors
+                      }
+                    }
+                  };
+                  rec.start();
+                  demoRecognitionRef.current = rec;
+                } catch {
+                  // Browser speech recognition optional
+                }
+              }
+            }
           } else if (msg.type === "audio" && typeof msg.data === "string") {
             schedulePcm24kPlayback(msg.data);
           } else if (msg.type === "interrupted") {
@@ -440,6 +500,26 @@ export function useLiveVoiceFlow({
             appendTranscriptChunk("user", msg.text);
           } else if (msg.type === "output_transcript" && typeof msg.text === "string") {
             appendTranscriptChunk("assistant", msg.text);
+            if (demoModeRef.current && msg.text.trim()) {
+              const langName = detectedLangRef.current || hintLanguage;
+              const locale = LANGUAGE_LOCALE_MAP[langName] ?? "en-IN";
+              speakText(
+                msg.text.trim(),
+                locale,
+                () => {
+                  setAiSpeaking(true);
+                  if (statusRef.current !== "drafting") setStatus("speaking");
+                },
+                () => {
+                  setAiSpeaking(false);
+                  if (!isClosingRef.current && statusRef.current === "speaking") {
+                    setStatus(micPausedRef.current ? "paused" : "listening");
+                  }
+                },
+                undefined,
+                langName,
+              );
+            }
           } else if (msg.type === "intake_update" && msg.data && typeof msg.data === "object") {
             const patch = msg.data as LiveIntakePatch;
             if (patch.detectedSpokenLanguage) {

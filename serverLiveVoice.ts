@@ -10,6 +10,7 @@ import {
 } from "@google/genai";
 import { INDIAN_STATES_AND_UTS } from "./src/data/indiaLocations.ts";
 import type { ComplaintCategory } from "./src/types.ts";
+import { attachDemoLiveVoiceSession, hasGeminiApiKey } from "./serverDemoFallback.ts";
 
 function getVoiceAiClient(): GoogleGenAI {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
@@ -167,6 +168,14 @@ export function registerTtsRoute(
       const cached = getCachedTts(cacheKey);
       if (cached) {
         res.json({ audioBase64: cached, mimeType: "audio/wav", voiceName });
+        return;
+      }
+
+      if (!hasGeminiApiKey()) {
+        res.status(503).json({
+          error: "Using local browser speech synthesis.",
+          code: "NO_API_KEY_FALLBACK",
+        });
         return;
       }
 
@@ -418,6 +427,11 @@ export function attachLiveVoiceWebSocket(
     const reqUrl = new URL(req.url ?? "/api/live-voice", "http://localhost");
     const rawHintLang = reqUrl.searchParams.get("hintLanguage") ?? "English";
     const hintLanguage = normalizeSpokenLanguage(rawHintLang) ?? "English";
+
+    if (!hasGeminiApiKey()) {
+      attachDemoLiveVoiceSession(clientWs, hintLanguage, safeSendWs);
+      return;
+    }
 
     let closed = false;
     // Track pending browser-executed tool calls (generate_official_draft, execute_voice_action)

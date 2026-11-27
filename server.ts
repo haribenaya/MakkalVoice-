@@ -14,6 +14,14 @@ import {
 import { INDIAN_STATES_AND_UTS } from "./src/data/indiaLocations.ts";
 import type { ComplaintCategory } from "./src/types.ts";
 import { attachLiveVoiceWebSocket, registerTtsRoute } from "./serverLiveVoice.ts";
+import {
+  demoExtractFromComplaint,
+  demoFollowupQuestion,
+  demoGenerateComplaintDraft,
+  demoGenerateEscalationDraft,
+  demoPortalAssistantReply,
+  hasGeminiApiKey,
+} from "./serverDemoFallback.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -564,8 +572,9 @@ async function startServer() {
     res.json({
       app: "MakkalVoice API",
       status: "running",
-      provider: "Gemini",
+      provider: hasGeminiApiKey() ? "Gemini" : "Local Demo Fallback",
       model: MODEL_NAME,
+      demoFallbackActive: !hasGeminiApiKey(),
     });
   });
 
@@ -708,6 +717,17 @@ async function startServer() {
 
       if (!/^image\/(jpeg|jpg|png|webp)$/i.test(mimeType)) {
         res.status(400).json({ error: "Only JPG, PNG, or WEBP images are supported." });
+        return;
+      }
+
+      if (!hasGeminiApiKey()) {
+        res.json({
+          issueSummary:
+            "Uploaded photo/document attached as supporting evidence. Please review or add a brief voice/text description of the visible civic issue.",
+          extractedReferenceNumber: "",
+          suggestedCategory: "Civic Issues",
+          extractedLocationHint: "",
+        });
         return;
       }
 
@@ -860,6 +880,14 @@ async function startServer() {
         }
       }
 
+      if (!hasGeminiApiKey()) {
+        res.json({
+          transcript: "",
+          engine: "demo-fallback",
+        });
+        return;
+      }
+
       const ai = getAiClient();
 
       const dictationPrompt = [
@@ -964,6 +992,18 @@ async function startServer() {
         return;
       }
 
+      if (!hasGeminiApiKey()) {
+        const extracted = demoExtractFromComplaint(complaint);
+        res.json({
+          category: extracted.category,
+          state: extracted.state,
+          district: extracted.district,
+          town: extracted.town,
+          street: extracted.street,
+        });
+        return;
+      }
+
       const ai = getAiClient();
 
       const parsed = await generateWithFailover(
@@ -1058,6 +1098,21 @@ async function startServer() {
       const cachedFollowup = getCachedAiResponse<{ complete: boolean; question: string; reason: string }>(followupCacheKey);
       if (cachedFollowup) {
         res.json(cachedFollowup);
+        return;
+      }
+
+      if (!hasGeminiApiKey()) {
+        res.json(
+          demoFollowupQuestion({
+            complaint,
+            language,
+            state: cleanText(body.state, 100),
+            district: cleanText(body.district, 100),
+            town: cleanText(body.town, 120),
+            answersCount: answers.length,
+            askedQuestions,
+          }),
+        );
         return;
       }
 
@@ -1206,6 +1261,29 @@ async function startServer() {
         res.status(400).json({
           error: "Complaint description is required to generate a draft.",
         });
+        return;
+      }
+
+      if (!hasGeminiApiKey()) {
+        const mode = normalizeSubmissionMode(body.mode);
+        const previousTicketId = cleanText(body.previousTicketId, 100);
+        res.json(
+          demoGenerateComplaintDraft({
+            mode,
+            previousTicketId,
+            complaint,
+            category,
+            state,
+            district,
+            town,
+            street,
+            pincode,
+            referenceNumber,
+            answers,
+            draftLanguage,
+            uiLanguage,
+          }),
+        );
         return;
       }
 
@@ -1485,6 +1563,23 @@ async function startServer() {
         return;
       }
 
+      if (!hasGeminiApiKey()) {
+        res.json(
+          demoGenerateEscalationDraft({
+            subject,
+            originalDraft,
+            category,
+            state,
+            district,
+            portalName,
+            trackingId,
+            filedDate,
+            draftLanguage,
+          }),
+        );
+        return;
+      }
+
       const ai = getAiClient();
       const todayFormatted = new Date().toLocaleDateString("en-IN", {
         day: "2-digit",
@@ -1672,6 +1767,20 @@ async function startServer() {
         "Current citizen complaint context:",
         ...contextLines,
       ].join("\n");
+
+      if (!hasGeminiApiKey()) {
+        res.json({
+          reply: demoPortalAssistantReply({
+            message,
+            portalName,
+            portalUrl,
+            portalHelpline,
+            suggestedAuthority,
+            documentTitles: docTitles,
+          }),
+        });
+        return;
+      }
 
       const ai = getAiClient();
       const reply = await generateWithFailover(

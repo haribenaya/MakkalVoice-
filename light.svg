@@ -198,7 +198,7 @@
         <animate attributeName="opacity" from="0" to="1" dur="0.45s" begin="0.5s" fill="freeze" />
 
         <text x="604" y="232" text-anchor="end" fill="#64748B">&gt; TEAM</text>
-        <text x="624" y="232" fill="#334155">Hariharan M, Bhashini &amp; Hariharan</text>
+        <text x="624" y="232" fill="#334155">Hariharan M, Bhashini S &amp; Hariharan S</text>
 
         <text x="604" y="258" text-anchor="end" fill="#64748B">&gt; FOCUS</text>
         <text x="624" y="258" fill="#334155">Voice Interfaces · Civic Access · Multilingual AI</text>

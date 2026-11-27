@@ -4,7 +4,7 @@
     <source media="(prefers-color-scheme: light)" srcset="./light.svg" />
     <img
       src="./dark.svg"
-      alt="Hariharan M — Software Builder & Voice-First AI Profile Banner for MakkalVoice"
+      alt="Hariharan M — Voice-First Product Builder & Civic Tech Innovator Profile Banner for MakkalVoice"
       width="100%"
     />
   </picture>
@@ -14,7 +14,7 @@
 
 # MakkalVoice — Voice-First Civic Action for Bharat
 
-Built by **Hariharan M** (**Hariharan's Team**) for **Scaler × Wispr Flow — Build for Bharat** (*Theme: Public Infrastructure and Civic Services*).
+Built by **Hariharan M**, **Bhashini**, and **Hariharan** (**Hariharan's Team**) for **Scaler × Wispr Flow — Build for Bharat** (*Theme: Public Infrastructure and Civic Services*).
 
 **MakkalVoice** turns natural spoken civic, utility, consumer, RTI, or escalation issues across **13 Indian languages** into formal, submission-ready official letters matched to verified Indian government portals — without typing or complex forms.
 
@@ -56,14 +56,14 @@ To run with live **Gemini Live Audio**, multimodal photo/bill scanning, and AI r
 
 | Layer | Technologies |
 | --- | --- |
-| **Frontend** | TypeScript, React 19, Vite, Tailwind CSS, Lucide Icons, jsPDF |
-| **Backend & Real-Time** | Node.js, Express, WebSockets (`ws`) |
+| **Interface & Design** | TypeScript, React 19, Vite, Tailwind CSS, Lucide Icons, jsPDF |
+| **Server & Real-Time** | Node.js, Express, WebSockets (`ws`) |
 | **AI & Voice** | Google `@google/genai` (Gemini Live API, Multimodal Audio/Image, Neural TTS) + Local Fallback |
 | **Client Persistence** | Browser `localStorage` for saved complaints, offline queue & on-device privacy |
 
 ---
 
-## Connect
+## Team & Connect
 
-- **Live Prototype:** [MakkalVoice on Cloud Run](https://ais-pre-ku3grlpqjfttslpwioqmwf-129114898352.asia-east1.run.app)
-- **Email:** hariharan.m.s.287@gmail.com
+- **Team:** Hariharan M, Bhashini & Hariharan (*Hariharan's Team*)
+- **Email:** haribenaya32@gmail.com

@@ -31,13 +31,19 @@ Built by **Hariharan M**, **Bhashini**, and **Hariharan** (**Hariharan's Team**)
 
 ## Quick Start (Starts Without Any Secret Keys)
 
-Clone the repository and start the app locally with **zero API keys required**:
+Clone the repository and start the app with **one command** and **zero API keys required**:
 
+### Option A — Docker (Recommended)
+```bash
+docker compose up --build
+```
+Then open **http://localhost:3000** in your browser.
+
+### Option B — Local Node.js
 ```bash
 npm install
 npm run dev
 ```
-
 Open **http://localhost:3000** in your browser.
 
 > **No-Key Local Demo Mode:** When `GEMINI_API_KEY` is not set in `.env`, MakkalVoice automatically enables its built-in **Local Demo Fallback** (`serverDemoFallback.ts`), using browser speech recognition/synthesis and deterministic Indian civic routing so the full end-to-end flow runs immediately with zero secret keys.

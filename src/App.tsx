@@ -1197,10 +1197,34 @@ export default function App() {
     ): Promise<LiveVoiceCommandResult> => {
       const latestForm = formRef.current;
       const latestAnswers = answersRef.current;
-      if (!latestForm.complaint.trim() || latestForm.complaint.trim().length < 6) {
+      const effectiveDistrict = resolveEffectiveDistrict(latestForm).trim();
+      const contactDigits = latestForm.contact.replace(/\D/g, "");
+      const missingFields: string[] = [];
+
+      if (!latestForm.complaint.trim() || latestForm.complaint.trim().length < 8) {
+        missingFields.push("complaint_problem_description");
+      }
+      if (!latestForm.state.trim()) {
+        missingFields.push("state");
+      }
+      if (!effectiveDistrict) {
+        missingFields.push("district_or_city");
+      }
+      if (!latestForm.town.trim() && !latestForm.street.trim()) {
+        missingFields.push("town_area_street_or_landmark");
+      }
+      if (latestForm.name.trim().length < 2) {
+        missingFields.push("citizen_full_name");
+      }
+      if (contactDigits.length < 10) {
+        missingFields.push("mobile_number_10_digits");
+      }
+
+      if (missingFields.length > 0) {
         return {
           success: false,
-          error: "Need a brief description of the citizen's problem before drafting.",
+          missingFields,
+          error: `Do NOT generate the draft yet. Still missing required details: ${missingFields.join(", ")}. Ask the citizen politely for ONE missing item at a time in pure natural ${spokenLanguage || "spoken language"} (NEVER use English loanwords like 'state', 'district', 'area', or 'phone number' inside a regional language), save it with update_complaint_details, and call generate_official_draft only once all required fields are filled.`,
         };
       }
 

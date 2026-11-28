@@ -432,8 +432,10 @@ export function attachDemoLiveVoiceSession(
   let extractedState = "";
   let extractedDistrict = "";
   let extractedTown = "";
+  let extractedStreet = "";
   let citizenName = "";
   let citizenPhone = "";
+  let currentLang = hintLanguage;
   let pendingChannel: "gmail" | "whatsapp" | null = null;
   let draftCreated = false;
   let callCounter = 1;
@@ -485,6 +487,9 @@ export function attachDemoLiveVoiceSession(
       safeSendWs(clientWs, { type: "input_transcript", text });
       const lower = text.toLowerCase();
 
+      if (/[\u0B80-\u0BFF]/.test(text)) currentLang = "Tamil";
+      else if (/[\u0900-\u097F]/.test(text)) currentLang = "Hindi";
+
       // Voice commands
       if (/\b(end|close|exit|bye|stop session|finish)\b/.test(lower)) {
         safeSendWs(clientWs, {
@@ -493,7 +498,11 @@ export function attachDemoLiveVoiceSession(
           name: "execute_voice_action",
           args: { action: "end_voice_flow" },
         });
-        sendReply("Thank you for using MakkalVoice. Have a good day!");
+        sendReply(
+          currentLang === "Tamil"
+            ? "மக்கள் வாய்ஸ் பயன்படுத்தியதற்கு நன்றி. வணக்கம்!"
+            : "Thank you for using MakkalVoice. Have a good day!",
+        );
         return;
       }
 
@@ -584,55 +593,91 @@ export function attachDemoLiveVoiceSession(
         return;
       }
 
-      if (/\b(draft|create letter|generate|submit|ready)\b/.test(lower)) {
-        safeSendWs(clientWs, {
-          type: "voice_command",
-          callId: `demo-${callCounter++}`,
-          name: "generate_official_draft",
-          args: { draftLanguage: "English" },
-        });
-        sendReply("Preparing your official complaint letter and matching the verified portal now.");
-        return;
-      }
-
-      // Otherwise treat input as intake details
+      // Extract phone & name & location
       const phoneMatch = text.replace(/[\s-]/g, "").match(/\b([6-9]\d{9})\b/);
       if (phoneMatch) citizenPhone = phoneMatch[1];
 
-      const nameMatch = text.match(/(?:my name is|i am|name[:\s]+)\s*([A-Za-z][A-Za-z\s]{1,40})/i);
+      const nameMatch = text.match(/(?:my name is|i am|name[:\s]+|என் பெயர்|பெயர்)\s*([A-Za-z\u0B80-\u0BFF\u0900-\u097F][A-Za-z\u0B80-\u0BFF\u0900-\u097F\s.]{1,40})/i);
       if (nameMatch) citizenName = nameMatch[1].trim();
+      else if (
+        !citizenName &&
+        spokenComplaint &&
+        (extractedState || extractedDistrict) &&
+        (extractedTown || extractedStreet) &&
+        !phoneMatch &&
+        text.split(/\s+/).length <= 4 &&
+        !/\d/.test(text)
+      ) {
+        citizenName = text;
+      }
 
       const extracted = demoExtractFromComplaint(text);
       if (extracted.state) extractedState = extracted.state;
       if (extracted.district) extractedDistrict = extracted.district;
       if (extracted.town) extractedTown = extracted.town;
+      if (extracted.street) extractedStreet = extracted.street;
 
-      if (text.length >= 6 && !phoneMatch && !nameMatch) {
+      if (!extractedStreet && spokenComplaint && (extractedState || extractedDistrict) && !extractedTown && !phoneMatch && !nameMatch && text.length >= 4) {
+        extractedTown = text.slice(0, 100);
+      }
+
+      if (text.length >= 6 && !phoneMatch && !nameMatch && citizenName !== text) {
         spokenComplaint = spokenComplaint ? `${spokenComplaint} ${text}` : text;
-      } else if (!spokenComplaint && text.length >= 10) {
-        spokenComplaint = text;
       }
 
       const patch: Record<string, string> = {};
+      patch.detectedSpokenLanguage = currentLang;
       if (spokenComplaint) patch.complaint = spokenComplaint;
       patch.category = extracted.category;
       if (extractedState) patch.state = extractedState;
       if (extractedDistrict) patch.district = extractedDistrict;
       if (extractedTown) patch.town = extractedTown;
-      if (extracted.street) patch.street = extracted.street;
+      if (extractedStreet) patch.street = extractedStreet;
       if (extracted.pincode) patch.pincode = extracted.pincode;
       if (citizenName) patch.name = citizenName;
       if (citizenPhone) patch.contact = citizenPhone;
 
       safeSendWs(clientWs, { type: "intake_update", data: patch });
 
-      if (!spokenComplaint) {
-        sendReply("Thank you. Please describe the civic or consumer problem you are facing.");
-      } else if (!extractedState && !extractedDistrict && !extractedTown) {
-        sendReply("Got it. Which city, area, or state is this issue in?");
-      } else if (!citizenName || !citizenPhone) {
+      if (!spokenComplaint || spokenComplaint.length < 8) {
         sendReply(
-          "Thank you. Please share your full name and 10-digit mobile number so I can prepare your formal letter.",
+          currentLang === "Tamil"
+            ? "தயவுசெய்து உங்கள் பிரச்சனையைப் பற்றித் தெளிவாகச் சொல்லுங்கள்."
+            : currentLang === "Hindi"
+              ? "कृपया अपनी समस्या के बारे में विस्तार से बताइए।"
+              : "Please describe the civic or consumer problem you are facing.",
+        );
+      } else if (!extractedState || !extractedDistrict) {
+        sendReply(
+          currentLang === "Tamil"
+            ? "சரி, உங்கள் மாநிலம் மற்றும் மாவட்டம் எது என்று சொல்லுங்கள்."
+            : currentLang === "Hindi"
+              ? "कृपया बताइए यह समस्या किस राज्य और ज़िले में है?"
+              : "Got it. Which State and District is this issue in?",
+        );
+      } else if (!extractedTown && !extractedStreet) {
+        sendReply(
+          currentLang === "Tamil"
+            ? "நன்றி. அந்தப் பகுதி, ஊர் அல்லது தெருவின் பெயரையும் சொல்லுங்கள்."
+            : currentLang === "Hindi"
+              ? "धन्यवाद। कृपया उस इलाके, मोहल्ले या गली का नाम भी बताइए।"
+              : "Thank you. Please tell me the exact area, town, street, or nearby landmark.",
+        );
+      } else if (!citizenName) {
+        sendReply(
+          currentLang === "Tamil"
+            ? "நன்றி. புகார் கடிதத்தில் சேர்க்க உங்கள் முழுப் பெயரைச் சொல்லுங்கள்."
+            : currentLang === "Hindi"
+              ? "धन्यवाद। शिकायत पत्र के लिए कृपया अपना पूरा नाम बताइए।"
+              : "Thank you. Please tell me your full name for the official letter.",
+        );
+      } else if (!citizenPhone) {
+        sendReply(
+          currentLang === "Tamil"
+            ? "இறுதியாக, உங்கள் பத்து இலக்க கைபேசி எண்ணைச் சொல்லுங்கள். இது உங்கள் சாதனத்தில் மட்டுமே பாதுகாப்பாக இருக்கும்."
+            : currentLang === "Hindi"
+              ? "अंत में, कृपया अपना दस अंकों का मोबाइल नंबर बताइए।"
+              : "Finally, please share your 10-digit mobile number for the complaint record.",
         );
       } else {
         safeSendWs(clientWs, {
@@ -641,7 +686,13 @@ export function attachDemoLiveVoiceSession(
           name: "generate_official_draft",
           args: { draftLanguage: "English" },
         });
-        sendReply("I have all your details. Generating your formal official complaint draft now.");
+        sendReply(
+          currentLang === "Tamil"
+            ? "எல்லா விவரங்களும் கிடைத்துவிட்டன. இப்போது உங்கள் அதிகாரப்பூர்வ புகார் கடிதத்தைத் தயாரிக்கிறேன்."
+            : currentLang === "Hindi"
+              ? "सभी जानकारी मिल गई है। अब मैं आपका आधिकारिक शिकायत पत्र तैयार कर रहा हूँ।"
+              : "I have all your required details. Generating your formal official complaint draft now.",
+        );
       }
     } catch {
       // Ignore malformed frame

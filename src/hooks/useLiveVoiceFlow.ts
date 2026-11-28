@@ -68,7 +68,7 @@ function downsampleFloat32To16k(
   input: Float32Array,
   inputSampleRate: number,
 ): Int16Array {
-  if (inputSampleRate === 16000) {
+  if (Math.abs(inputSampleRate - 16000) < 1) {
     const out = new Int16Array(input.length);
     for (let i = 0; i < input.length; i += 1) {
       const s = Math.max(-1, Math.min(1, input[i]));
@@ -81,15 +81,11 @@ function downsampleFloat32To16k(
   const newLength = Math.max(1, Math.round(input.length / ratio));
   const out = new Int16Array(newLength);
   for (let i = 0; i < newLength; i += 1) {
-    const start = Math.floor(i * ratio);
-    const end = Math.min(input.length, Math.floor((i + 1) * ratio));
-    let sum = 0;
-    let count = 0;
-    for (let j = start; j < end; j += 1) {
-      sum += input[j];
-      count += 1;
-    }
-    const sample = count > 0 ? sum / count : input[Math.min(start, input.length - 1)] ?? 0;
+    const srcPos = i * ratio;
+    const idx0 = Math.min(input.length - 1, Math.floor(srcPos));
+    const idx1 = Math.min(input.length - 1, idx0 + 1);
+    const frac = srcPos - idx0;
+    const sample = input[idx0] * (1 - frac) + input[idx1] * frac;
     const clamped = Math.max(-1, Math.min(1, sample));
     out[i] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
   }
@@ -156,6 +152,7 @@ export function useLiveVoiceFlow({
   const isClosingRef = useRef<boolean>(false);
   const demoModeRef = useRef<boolean>(false);
   const demoRecognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const assistantTurnEndedRef = useRef<boolean>(false);
 
   const onIntakeUpdateRef = useRef(onIntakeUpdate);
   const onGenerateDraftRef = useRef(onGenerateDraftCommand);
@@ -230,24 +227,35 @@ export function useLiveVoiceFlow({
   }, []);
 
   const appendTranscriptChunk = useCallback((role: "user" | "assistant", chunk: string) => {
-    const cleaned = chunk.replace(/\s+/g, " ");
-    if (!cleaned.trim()) return;
+    const normalizedChunk = chunk.replace(/[\r\n]+/g, " ").replace(/ {2,}/g, " ");
+    if (!normalizedChunk.trim()) return;
+
+    const startsNewTurn = role === "assistant" && assistantTurnEndedRef.current;
+    if (role === "assistant") {
+      assistantTurnEndedRef.current = false;
+    } else {
+      // User started speaking, so any next assistant utterance is naturally a new turn
+      assistantTurnEndedRef.current = false;
+    }
+
     setTranscripts((prev) => {
       const last = prev[prev.length - 1];
-      if (last && last.role === role) {
-        const needsSpace =
-          last.text.length > 0 &&
-          !/\s$/.test(last.text) &&
-          !/^[\s.,!?،।]/.test(cleaned);
-        const merged = `${last.text}${needsSpace ? " " : ""}${cleaned.trim()}`.trim();
-        return [...prev.slice(0, -1), { ...last, text: merged }];
+      if (!startsNewTurn && last && last.role === role) {
+        const joined = `${last.text}${normalizedChunk}`
+          .replace(/([.!?।॥])([^\s.!?।॥"'”’)\]\d])/gu, "$1 $2")
+          .replace(/ {2,}/g, " ");
+        return [...prev.slice(0, -1), { ...last, text: joined }];
       }
+      const freshText = normalizedChunk
+        .trimStart()
+        .replace(/([.!?।॥])([^\s.!?।॥"'”’)\]\d])/gu, "$1 $2")
+        .replace(/ {2,}/g, " ");
       return [
         ...prev.slice(-28),
         {
           id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           role,
-          text: cleaned.trim(),
+          text: freshText,
         },
       ];
     });
@@ -389,7 +397,7 @@ export function useLiveVoiceFlow({
       wsRef.current = ws;
 
       const source = inputCtx.createMediaStreamSource(stream);
-      const processor = inputCtx.createScriptProcessor(4096, 1, 1);
+      const processor = inputCtx.createScriptProcessor(2048, 1, 1);
       // Connect through zero-gain node so mic audio never echoes into speakers
       const silentGain = inputCtx.createGain();
       silentGain.gain.value = 0;
@@ -493,6 +501,7 @@ export function useLiveVoiceFlow({
           } else if (msg.type === "interrupted") {
             stopAllPlayback();
           } else if (msg.type === "turn_complete") {
+            assistantTurnEndedRef.current = true;
             if (activeSourcesRef.current.size === 0 && statusRef.current !== "drafting") {
               setStatus(micPausedRef.current ? "paused" : "listening");
             }

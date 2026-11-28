@@ -35,8 +35,8 @@ const TRANSCRIBE_MODELS = [
   "gemini-4-hydrogen",
   "gemini-3.1-flash-lite",
 ] as const;
-const REQUEST_TIMEOUT_MS = 22_000;
-const ATTEMPT_TIMEOUT_MS = 14_000;
+const REQUEST_TIMEOUT_MS = 18_000;
+const ATTEMPT_TIMEOUT_MS = 12_000;
 const MAX_FOLLOWUP_QUESTIONS = 4;
 
 // Per-model transient health cooldown so busy/rate-limited models are skipped immediately
@@ -367,13 +367,15 @@ function extractRetryAfterMs(error: unknown): number | null {
 }
 
 function isQuotaOrBusyError(error: unknown): boolean {
-  const err = error as { status?: number; message?: string };
+  const err = error as { status?: number; statusCode?: number; code?: string; message?: string };
   const msg = String(err?.message ?? "");
   return (
+    err?.statusCode === 504 ||
+    err?.code === "TIMEOUT" ||
     err?.status === 503 ||
     err?.status === 429 ||
     err?.status === 500 ||
-    /UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand|quota/i.test(msg)
+    /UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|overloaded|high demand|quota|timed out/i.test(msg)
   );
 }
 
@@ -405,7 +407,7 @@ async function generateWithFailover<T>(
   models: readonly string[],
   runForModel: (model: string) => Promise<T>,
   attemptTimeoutMs = ATTEMPT_TIMEOUT_MS,
-  maxRounds = 3,
+  maxRounds = 2,
 ): Promise<T> {
   if (models.length === 0) {
     throw new Error("No AI models configured.");
@@ -428,9 +430,9 @@ async function generateWithFailover<T>(
         const rateLimited = isRateLimitError(err);
         if (!rateLimited) sawOnlyRateLimits = false;
 
-        console.warn(
-          `[MakkalVoice AI] round ${round + 1}/${maxRounds} (${model}) failed:`,
-          errMsg.slice(0, 180),
+        console.log(
+          `[MakkalVoice AI] attempt ${round + 1}/${maxRounds} (${model}) switching to backup:`,
+          errMsg.slice(0, 140),
         );
 
         // Immediately fail fast on auth / key errors (never retry invalid key)
@@ -441,10 +443,11 @@ async function generateWithFailover<T>(
           throw err;
         }
 
-        // Cool down overloaded or rate-limited model so subsequent calls route to healthy backup first
+        // Cool down overloaded, timed-out, or rate-limited model so subsequent calls route to healthy backup first
         if (isQuotaOrBusyError(err)) {
           const retryHint = extractRetryAfterMs(err);
-          const defaultCooldown = rateLimited ? 55_000 : 15_000;
+          const timedOut = (err as { code?: string })?.code === "TIMEOUT" || /timed out/i.test(errMsg);
+          const defaultCooldown = rateLimited ? 55_000 : timedOut ? 30_000 : 15_000;
           const cooldownMs = retryHint ? Math.max(retryHint, defaultCooldown) : defaultCooldown;
           modelCooldownUntil.set(model, Date.now() + cooldownMs);
         }
@@ -1054,6 +1057,21 @@ async function startServer() {
       setCachedAiResponse(cacheKey, payload);
       res.json(payload);
     } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        const b = (req.body ?? {}) as { complaint?: string };
+        const complaintText = cleanMultilineText(b.complaint, 2500);
+        if (complaintText.length >= 5) {
+          const extracted = demoExtractFromComplaint(complaintText);
+          res.json({
+            category: extracted.category,
+            state: extracted.state,
+            district: extracted.district,
+            town: extracted.town,
+            street: extracted.street,
+          });
+          return;
+        }
+      }
       console.error("[/api/voice-understand] error:", error);
       const mapped = mapGeminiError(error);
       res.status(mapped.status).json({
@@ -1229,6 +1247,25 @@ async function startServer() {
       setCachedAiResponse(followupCacheKey, result);
       res.json(result);
     } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        const b = (req.body ?? {}) as FollowupRequestBody;
+        const complaintText = cleanMultilineText(b.complaint, 2500);
+        if (complaintText.length >= 6) {
+          const ans = sanitizeAnswers(b.answers);
+          res.json(
+            demoFollowupQuestion({
+              complaint: complaintText,
+              language: cleanText(b.language, 40) || "English",
+              state: cleanText(b.state, 100),
+              district: cleanText(b.district, 100),
+              town: cleanText(b.town, 120),
+              answersCount: ans.length,
+              askedQuestions: sanitizeQuestionList(b.askedQuestions, ans),
+            }),
+          );
+          return;
+        }
+      }
       console.error("[/api/complaint-followup] error:", error);
       const mapped = mapGeminiError(error);
       res.status(mapped.status).json({
@@ -1517,6 +1554,31 @@ async function startServer() {
       setCachedAiResponse(draftCacheKey, draftPayload);
       res.json(draftPayload);
     } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        const b = (req.body ?? {}) as DraftRequestBody;
+        const complaintText = cleanMultilineText(b.complaint, 2500);
+        if (complaintText.length >= 6) {
+          const lang = cleanText(b.language, 40) || "English";
+          res.json(
+            demoGenerateComplaintDraft({
+              mode: normalizeSubmissionMode(b.mode),
+              previousTicketId: cleanText(b.previousTicketId, 100),
+              complaint: complaintText,
+              category: normalizeCategory(b.category),
+              state: cleanText(b.state, 100),
+              district: cleanText(b.district, 100),
+              town: cleanText(b.town, 120),
+              street: cleanText(b.street, 200),
+              pincode: cleanText(b.pincode, 12),
+              referenceNumber: cleanText(b.referenceNumber, 80),
+              answers: sanitizeAnswers(b.answers),
+              draftLanguage: cleanText(b.draftLanguage, 40) || "English",
+              uiLanguage: cleanText(b.uiLanguage, 40) || lang,
+            }),
+          );
+          return;
+        }
+      }
       console.error("[/api/complaint-draft] error:", error);
       const mapped = mapGeminiError(error);
       res.status(mapped.status).json({
@@ -1661,6 +1723,37 @@ async function startServer() {
         englishButtonGuide: [],
       });
     } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        const b = (req.body ?? {}) as {
+          subject?: string;
+          originalDraft?: string;
+          category?: string;
+          state?: string;
+          district?: string;
+          portalName?: string;
+          trackingId?: string;
+          filedDate?: string;
+          draftLanguage?: string;
+        };
+        const orig = cleanMultilineText(b.originalDraft, 4000);
+        const subj = cleanText(b.subject, 240);
+        if (orig || subj) {
+          res.json(
+            demoGenerateEscalationDraft({
+              subject: subj,
+              originalDraft: orig,
+              category: normalizeCategory(b.category),
+              state: cleanText(b.state, 100),
+              district: cleanText(b.district, 100),
+              portalName: cleanText(b.portalName, 160),
+              trackingId: cleanText(b.trackingId, 100),
+              filedDate: cleanText(b.filedDate, 40),
+              draftLanguage: cleanText(b.draftLanguage, 40) || "English",
+            }),
+          );
+          return;
+        }
+      }
       console.error("[/api/escalation-draft] error:", error);
       const mapped = mapGeminiError(error);
       res.status(mapped.status).json({
@@ -1808,6 +1901,36 @@ async function startServer() {
 
       res.json({ reply });
     } catch (error) {
+      if (isRetryableGeminiError(error)) {
+        const b = (req.body ?? {}) as {
+          message?: string;
+          context?: {
+            portalName?: string;
+            portalUrl?: string;
+            portalHelpline?: string;
+            suggestedAuthority?: string;
+            documentTitles?: unknown;
+          };
+        };
+        const msg = cleanMultilineText(b.message, 1500);
+        if (msg) {
+          const ctxFallback = b.context ?? {};
+          const docs = Array.isArray(ctxFallback.documentTitles)
+            ? ctxFallback.documentTitles.filter((d): d is string => typeof d === "string").slice(0, 8)
+            : [];
+          res.json({
+            reply: demoPortalAssistantReply({
+              message: msg,
+              portalName: cleanText(ctxFallback.portalName, 160),
+              portalUrl: cleanText(ctxFallback.portalUrl, 200),
+              portalHelpline: cleanText(ctxFallback.portalHelpline, 60),
+              suggestedAuthority: cleanText(ctxFallback.suggestedAuthority, 160),
+              documentTitles: docs,
+            }),
+          });
+          return;
+        }
+      }
       console.error("[/api/portal-assistant-chat] error:", error);
       const mapped = mapGeminiError(error);
       res.status(mapped.status).json({
